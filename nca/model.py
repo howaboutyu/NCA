@@ -3,9 +3,8 @@ import flax.linen as nn
 
 
 class UpdateModel(nn.Module):
-
     model_output_len: int = 16
-    
+
     def setup(self):
         """Initialize the model layers."""
         self.dense1 = nn.Dense(128)

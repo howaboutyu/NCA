@@ -127,9 +127,6 @@ def alive_masking(state_grid, alive_threshold=0.1):
     return state_grid
 
 
-
-
-
 """
 kernel_x, kernel_y = create_perception_kernel(use_iohw_layout=True)
 
