@@ -44,7 +44,8 @@ def create_perception_kernel(
         kernel_x = jnp.transpose(kernel_x, (3, 2, 0, 1))
         kernel_y = jnp.transpose(kernel_y, (3, 2, 0, 1))
 
-    return kernel_x, kernel_y
+    return kernel_x/8., kernel_y/8.
+
 
 
 def perceive(
@@ -78,7 +79,11 @@ def perceive(
 
 
 def cell_update(key, state_grid, model_fn, params, kernel_x, kernel_y, update_prob=0.5):
+    
+    pre_alive_mask = alive_masking(state_grid)
+    
     perceived_grid = perceive(state_grid, kernel_x, kernel_y)
+    #perceived_grid = jax.lax.stop_gradient(perceived_grid)
 
     # NCHW -> NHWC
     perceived_grid = jnp.transpose(perceived_grid, (0, 2, 3, 1))
@@ -93,8 +98,11 @@ def cell_update(key, state_grid, model_fn, params, kernel_x, kernel_y, update_pr
 
     state_grid = state_grid + ds
 
-    # Alive masking
-    state_grid = alive_masking(state_grid)
+    
+    post_alive_mask = alive_masking(state_grid)
+    alive_mask = pre_alive_mask * post_alive_mask
+    
+    state_grid = alive_mask.astype(jnp.float32) * state_grid
 
     return state_grid
 
@@ -123,8 +131,7 @@ def alive_masking(state_grid, alive_threshold=0.1):
 
     alive = jnp.expand_dims(alive, axis=1)
 
-    state_grid = state_grid * alive
-    return state_grid
+    return alive
 
 
 """
