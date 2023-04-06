@@ -45,9 +45,13 @@ state = train_state.TrainState.create(apply_fn=model, params=params, tx=tx)
 
 
 def get_data():
-    img = cv2.imread("emoji_imgs/skier.png") / 255.0
+    img = cv2.imread("emoji_imgs/skier.png", -1) / 255.0
     img = cv2.resize(img, config.dimensions)
+
+    # apply alpha
+    img = img[..., :3] * img[..., 3:4]
     return img
+
 
 @jax.jit
 def train_step(state, key, state_grid, target):
@@ -58,7 +62,7 @@ def train_step(state, key, state_grid, target):
     )
 
     def loss_fn(params, state_grid, key):
-        for _ in range(32):
+        for _ in range(64):
             state_grid = cell_update(
                 key,
                 state_grid,
@@ -71,21 +75,22 @@ def train_step(state, key, state_grid, target):
             key, _ = jax.random.split(key)
 
         # import pdb; pdb.set_trace()
+        # state_grid = jnp.clip(state_grid, 0., 1.)
         alpha = state_grid[:, 3]
         alpha = jnp.expand_dims(alpha, 1)
-        alpha = jnp.clip(alpha, 0., 1.)
-        pred_rgb = 1 - alpha + state_grid[:, 0:3]
+
+        pred_rgb = alpha * state_grid[:, 0:3]
+        # alpha = jnp.clip(alpha, 0., 1.)
+        # pred_rgb = 1- alpha + state_grid[:, 0:3]
         return jax.numpy.mean(jax.numpy.square(pred_rgb - target))
 
     grad_fn = jax.value_and_grad(loss_fn)
 
     loss, grad = grad_fn(state.params, state_grid, key)
-    
-    clipped_grads = jax.tree_map(lambda g: jnp.clip(g, -5., 5.), grad)
 
     print(f"loss : {loss}")
 
-    state = state.apply_gradients(grads=clipped_grads)
+    state = state.apply_gradients(grads=grad)
 
     return state, loss
 
@@ -103,7 +108,7 @@ def render_state(state, key, state_grid):
         state_grid = cell_update(
             key,
             state_grid,
-            model.apply_fn,
+            model.apply,
             state.params,
             kernel_x,
             kernel_y,
@@ -111,15 +116,16 @@ def render_state(state, key, state_grid):
         )
         key, _ = jax.random.split(key)
 
+        # state_grid = jnp.clip(state_grid, 0., 1.)
 
         alpha = state_grid[:, 3]
         alpha = jnp.expand_dims(alpha, 1)
+        alpha = jnp.clip(alpha, 0.0, 1.0)
         pred_rgb = state_grid[:, :3] * alpha
+        # pred_rgb = 1- alpha + state_grid[:, 0:3]
         pred_rgb_array.append(pred_rgb)
-    
 
     return pred_rgb_array
-
 
 
 for epoch in range(config.num_epochs):
@@ -130,24 +136,21 @@ for epoch in range(config.num_epochs):
     # NHWC -> NCHW
     state_grid = np.transpose(state_grid, (0, 3, 1, 2))
     target = np.transpose(target, (0, 3, 1, 2))
-    
-    print(f'Epoch: {epoch}')
+
+    print(f"Epoch: {epoch}")
     state, loss = train_step(state, key, state_grid, target)
-    print(f'Loss : {loss}')
+    print(f"Loss : {loss}")
     key, _ = jax.random.split(key)
-    
-    
-    # Render 
-    if epoch < 20_000: continue
+
+    # Render
+    if epoch % 1_000 != 0:
+        continue
     predicted_sequence = render_state(state, key, state_grid)
 
     for cc, img in enumerate(predicted_sequence):
         img_uint8 = np.asarray(img * 255).astype(np.uint8)
-        
-        img_uint8 =img_uint8.transpose(0, 2, 3, 1)[0]
-        print(f'max predicted: {np.max(img_uint8)}')
-        #import pdb; pdb.set_trace()
-        cv2.imwrite(f'img_{str(cc).zfill(5)}.png', img_uint8)
-        
-    
-    
+
+        img_uint8 = img_uint8.transpose(0, 2, 3, 1)[0]
+        print(f"max predicted: {np.max(img_uint8)}")
+        # import pdb; pdb.set_trace()
+        cv2.imwrite(f"img_{str(cc).zfill(5)}.png", img_uint8)
