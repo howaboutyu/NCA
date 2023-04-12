@@ -76,9 +76,13 @@ def perceive(
 
     return perceived_grid  # -> NCHW
 
+def get_alive_state(state_grid):
+    return state_grid[:, 3, :, :]
 
 def cell_update(key, state_grid, model_fn, params, kernel_x, kernel_y, update_prob=0.5):
-    pre_alive_mask = alive_masking(state_grid)
+    pre_alive_mask = alive_masking(
+        get_alive_state(state_grid)
+        )
 
     perceived_grid = perceive(state_grid, kernel_x, kernel_y)
     # perceived_grid = jax.lax.stop_gradient(perceived_grid)
@@ -96,7 +100,7 @@ def cell_update(key, state_grid, model_fn, params, kernel_x, kernel_y, update_pr
 
     state_grid = state_grid + ds
 
-    post_alive_mask = alive_masking(state_grid)
+    post_alive_mask = alive_masking(get_alive_state(state_grid))
     alive_mask = pre_alive_mask * post_alive_mask
 
     state_grid = alive_mask.astype(jnp.float32) * state_grid
@@ -104,14 +108,11 @@ def cell_update(key, state_grid, model_fn, params, kernel_x, kernel_y, update_pr
     return state_grid
 
 
-def alive_masking(state_grid, alive_threshold=0.1):
+def alive_masking(alive_state, alive_threshold=0.1):
     # This function is NCWH
     # Alive masking
     win_size = (1, 3, 3)
     win_stride = (1, 1, 1)
-
-    # alive state is the 4th channel
-    alive_state = state_grid[:, 3, :, :]
 
     # Max pooling
     alive = jax.lax.reduce_window(
@@ -126,8 +127,7 @@ def alive_masking(state_grid, alive_threshold=0.1):
     # if there are not "mature" cells in the 3x3 window, then the cell is "dead"
     alive = alive > alive_threshold
 
-    alive = jnp.expand_dims(alive, axis=1)
-
+    alive = alive.astype(jnp.float32)
     return alive
 
 
