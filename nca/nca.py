@@ -76,10 +76,9 @@ def perceive(
 
     return perceived_grid  # -> NCHW
 
-def get_alive_state(state_grid):
-    return state_grid[:, 3, :, :]
 
 def cell_update(key, state_grid, model_fn, params, kernel_x, kernel_y, update_prob=0.5):
+    get_alive_state = lambda x: x[:, 3, :, :]
     pre_alive_mask = alive_masking(
         get_alive_state(state_grid)
         )
@@ -108,28 +107,37 @@ def cell_update(key, state_grid, model_fn, params, kernel_x, kernel_y, update_pr
     return state_grid
 
 
-def alive_masking(alive_state, alive_threshold=0.1):
-    # This function is NCWH
+
+
+def alive_masking(alive_state: jnp.ndarray, alive_threshold: float = 0.1) -> jnp.ndarray:
+    """Applies alive masking to the input state array to identify "dead" cells.
+    
+    Args:
+        alive_state: The input state array of shape (batch_size, num_channels, height, width).
+        alive_threshold: The threshold value to use for the alive mask.
+        
+    Returns:
+        An array of shape (batch_size, num_channels, height, width) where each element is either 1.0 (alive) or 0.0 (dead).
+    """
     # Alive masking
-    win_size = (1, 3, 3)
-    win_stride = (1, 1, 1)
+    window_shape = (1, 3, 3)
+    window_stride = (1, 1, 1)
 
     # Max pooling
-    alive = jax.lax.reduce_window(
+    max_pool = jax.lax.reduce_window(
         alive_state,
-        -jnp.inf,
+        jnp.inf,
         jax.lax.max,
-        window_strides=win_stride,
-        window_dimensions=win_size,
+        window_strides=window_stride,
+        window_dimensions=window_shape,
         padding="SAME",
     )
 
-    # if there are not "mature" cells in the 3x3 window, then the cell is "dead"
-    alive = alive > alive_threshold
+    # If there are not "mature" cells in the 3x3 window, then the cell is "dead"
+    alive_mask = max_pool > alive_threshold
 
-    alive = alive.astype(jnp.float32)
-    return alive
-
+    alive_mask = alive_mask.astype(jnp.float32)
+    return alive_mask
 
 """
 kernel_x, kernel_y = create_perception_kernel(use_iohw_layout=True)
