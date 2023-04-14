@@ -7,6 +7,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 
 def create_perception_kernel(
     input_size: int = 16, output_size: int = 16, use_oihw_layout: bool = True
@@ -77,7 +79,15 @@ def perceive(
     return perceived_grid  # -> NCHW
 
 
-def cell_update(key, state_grid, model_fn, params, kernel_x, kernel_y, update_prob=0.5):
+def cell_update(
+    key: jax.random.PRNGKey,
+    state_grid: jnp.ndarray,
+    model_fn: Callable[[Any, jnp.ndarray], jnp.ndarray],
+    params: Any,
+    kernel_x: int,
+    kernel_y: int,
+    update_prob: float = 0.5,
+) -> jnp.ndarray:
     get_alive_state = lambda x: x[:, 3, :, :]
     pre_alive_mask = alive_masking(get_alive_state(state_grid))
 
@@ -86,6 +96,7 @@ def cell_update(key, state_grid, model_fn, params, kernel_x, kernel_y, update_pr
 
     # NCHW -> NHWC
     perceived_grid = jnp.transpose(perceived_grid, (0, 2, 3, 1))
+
     ds = model_fn(params, perceived_grid)  # -> NHWC
 
     # Stochastic update
