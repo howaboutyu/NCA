@@ -89,6 +89,7 @@ def cell_update(
     update_prob: float = 0.5,
 ) -> jnp.ndarray:
     get_alive_state = lambda x: x[:, 3, :, :]
+
     pre_alive_mask = alive_masking(get_alive_state(state_grid))
 
     perceived_grid = perceive(state_grid, kernel_x, kernel_y)
@@ -110,6 +111,7 @@ def cell_update(
 
     post_alive_mask = alive_masking(get_alive_state(state_grid))
     alive_mask = pre_alive_mask * post_alive_mask
+    alive_mask = jnp.expand_dims(alive_mask, 1)
 
     state_grid = alive_mask.astype(jnp.float32) * state_grid
 
@@ -147,6 +149,7 @@ def alive_masking(
     alive_mask = max_pool > alive_threshold
 
     alive_mask = alive_mask.astype(jnp.float32)
+
     return alive_mask
 
 
