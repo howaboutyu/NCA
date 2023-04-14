@@ -15,6 +15,8 @@ class Config:
     dimensions: tuple = (64, 64)
     model_output_len: int = 16
 
+    batch_size = 32
+
     num_epochs: int = 100000
     steps_per_epoch: int = 100
     learning_rate: float = 1e-4
@@ -45,11 +47,14 @@ state = train_state.TrainState.create(apply_fn=model, params=params, tx=tx)
 
 
 def get_data():
-    img = cv2.imread("emoji_imgs/skier.png", -1) / 255.0
-    img = cv2.resize(img, config.dimensions)
+    img = cv2.imread("emoji_imgs/skier.png", cv2.IMREAD_UNCHANGED)
+    assert img.shape[-1] == 4
 
-    # apply alpha
-    img = img[..., :3] * img[..., 3:4]
+    alpha = img[..., -1] > 0
+    img = img[..., :3] * alpha[..., np.newaxis]
+
+    img = cv2.resize(img, config.dimensions) / 255.0
+
     return img
 
 
@@ -74,14 +79,11 @@ def train_step(state, key, state_grid, target):
             )
             key, _ = jax.random.split(key)
 
-        # import pdb; pdb.set_trace()
-        # state_grid = jnp.clip(state_grid, 0., 1.)
-        alpha = state_grid[:, 3]
-        alpha = jnp.expand_dims(alpha, 1)
+        pred_rgb = state_grid[:, :3]
+        alpha = state_grid[:, 3:4]
+        alpha = jnp.clip(alpha, 0, 1)
 
-        pred_rgb = alpha * state_grid[:, 0:3]
-        # alpha = jnp.clip(alpha, 0., 1.)
-        # pred_rgb = 1- alpha + state_grid[:, 0:3]
+        pred_rgb = pred_rgb * alpha
         return jax.numpy.mean(jax.numpy.square(pred_rgb - target))
 
     grad_fn = jax.value_and_grad(loss_fn)
@@ -116,22 +118,22 @@ def render_state(state, key, state_grid):
         )
         key, _ = jax.random.split(key)
 
-        # state_grid = jnp.clip(state_grid, 0., 1.)
+        pred_rgb = state_grid[:, :3]
+        alpha = state_grid[:, 3:4]
 
-        alpha = state_grid[:, 3]
-        alpha = jnp.expand_dims(alpha, 1)
-        alpha = jnp.clip(alpha, 0.0, 1.0)
-        pred_rgb = state_grid[:, :3] * alpha
-        # pred_rgb = 1- alpha + state_grid[:, 0:3]
+        alpha = jnp.clip(alpha, 0, 1)
+
+        pred_rgb = pred_rgb * alpha
+
         pred_rgb_array.append(pred_rgb)
 
     return pred_rgb_array
 
 
 for epoch in range(config.num_epochs):
-    state_grid = np.zeros((2, 64, 64, 16), dtype=np.float32)
+    state_grid = np.zeros((config.batch_size, 64, 64, 16), dtype=np.float32)
     state_grid[:, 64 // 2, 64 // 2, 3:] = 1.0
-    target = np.asarray([get_data()] * 2)
+    target = np.asarray([get_data()] * config.batch_size)
 
     # NHWC -> NCHW
     state_grid = np.transpose(state_grid, (0, 3, 1, 2))
