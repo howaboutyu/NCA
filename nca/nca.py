@@ -79,9 +79,7 @@ def perceive(
 
 def cell_update(key, state_grid, model_fn, params, kernel_x, kernel_y, update_prob=0.5):
     get_alive_state = lambda x: x[:, 3, :, :]
-    pre_alive_mask = alive_masking(
-        get_alive_state(state_grid)
-        )
+    pre_alive_mask = alive_masking(get_alive_state(state_grid))
 
     perceived_grid = perceive(state_grid, kernel_x, kernel_y)
     # perceived_grid = jax.lax.stop_gradient(perceived_grid)
@@ -107,26 +105,27 @@ def cell_update(key, state_grid, model_fn, params, kernel_x, kernel_y, update_pr
     return state_grid
 
 
-
-
-def alive_masking(alive_state: jnp.ndarray, alive_threshold: float = 0.1) -> jnp.ndarray:
+def alive_masking(
+    alive_state: jnp.ndarray,
+    alive_threshold: float = 0.1,
+    window_shape: tuple = (1, 3, 3),
+    window_stride: tuple = (1, 1, 1),
+) -> jnp.ndarray:
     """Applies alive masking to the input state array to identify "dead" cells.
-    
+
     Args:
         alive_state: The input state array of shape (batch_size, num_channels, height, width).
         alive_threshold: The threshold value to use for the alive mask.
-        
+        window_shape: The shape of the window to use for max pooling.
+        window_stride: The stride of the window to use for max pooling.
+
     Returns:
         An array of shape (batch_size, num_channels, height, width) where each element is either 1.0 (alive) or 0.0 (dead).
     """
-    # Alive masking
-    window_shape = (1, 3, 3)
-    window_stride = (1, 1, 1)
-
     # Max pooling
     max_pool = jax.lax.reduce_window(
         alive_state,
-        jnp.inf,
+        -jnp.inf,
         jax.lax.max,
         window_strides=window_stride,
         window_dimensions=window_shape,
@@ -138,6 +137,7 @@ def alive_masking(alive_state: jnp.ndarray, alive_threshold: float = 0.1) -> jnp
 
     alive_mask = alive_mask.astype(jnp.float32)
     return alive_mask
+
 
 """
 kernel_x, kernel_y = create_perception_kernel(use_iohw_layout=True)
