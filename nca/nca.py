@@ -151,20 +151,3 @@ def alive_masking(
     alive_mask = alive_mask.astype(jnp.float32)
 
     return alive_mask
-
-
-"""
-kernel_x, kernel_y = create_perception_kernel(use_iohw_layout=True)
-
-# state_grid = jnp.zeros((1, 200, 198, 3), dtype=jnp.float32)
-state_grid = cv2.imread("emoji_imgs/skier.png") / 255.0
-state_grid = jnp.expand_dims(state_grid, axis=0)
-state_grid = jnp.transpose(state_grid, (0, 3, 1, 2))  # NHWC -> NCHW
-
-perceived_grid = perceive(state_grid, kernel_x, kernel_y)
-
-
-plt.figure(figsize=(10, 10))
-plt.imshow(np.array(perceived_grid)[0, 4, :, :])
-plt.show()
-"""

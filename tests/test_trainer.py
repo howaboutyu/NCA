@@ -33,12 +33,14 @@ def test_create_state(config):
 
 
 def test_cell_update_fn(config):
-    cell_update_fn = create_cell_update_fn(config)
 
     key = jax.random.PRNGKey(0)
     state_grid = jnp.zeros((1,) + config.dimensions + (config.model_output_len,))
     state_grid = NHWC_to_NCWH(state_grid)
     model = UpdateModel(model_output_len=config.model_output_len)
+
+    cell_update_fn = create_cell_update_fn(config, model)
+
     params = model.init(
         key,
         jax.random.normal(
@@ -46,9 +48,8 @@ def test_cell_update_fn(config):
             (1,) + config.dimensions + (config.model_output_len * 3,),
         ),
     )
-    print(model.apply)
 
-    new_state_grid = cell_update_fn(key, state_grid, model, params)
+    new_state_grid = cell_update_fn(key, state_grid, params)
     new_state_grid = NCWH_to_NHWC(new_state_grid)
 
     assert new_state_grid.shape == (1,) + config.dimensions + (config.model_output_len,)
@@ -61,7 +62,7 @@ def test_train_step(config, dummy_state):
     )
     target = jnp.zeros((config.batch_size,) + config.dimensions + (3,))
 
-    cell_update_fn = create_cell_update_fn(config)
+    cell_update_fn = create_cell_update_fn(config, dummy_state.apply_fn)
 
     state_grid = NHWC_to_NCWH(state_grid)
     target = NHWC_to_NCWH(target)
@@ -75,7 +76,7 @@ def test_eval_step(config, dummy_state):
     state_grid = jnp.zeros((bs,) + config.dimensions + (config.model_output_len,))
     target = jnp.zeros((bs,) + config.dimensions + (3,))
 
-    cell_update_fn = create_cell_update_fn(config)
+    cell_update_fn = create_cell_update_fn(config, dummy_state.apply_fn)
 
     state_grid = NHWC_to_NCWH(state_grid)
     target = NHWC_to_NCWH(target)

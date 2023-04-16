@@ -10,16 +10,6 @@ from nca.model import UpdateModel
 from nca.nca import create_perception_kernel, perceive, cell_update
 
 
-@dataclass
-class Config:
-    dimensions: tuple = (40, 40)
-    model_output_len: int = 16
-    batch_size = 16
-    num_epochs: int = 100000
-    steps_per_epoch: int = 100
-    learning_rate: float = 1e-4
-
-
 config = Config()
 
 # create learning rate

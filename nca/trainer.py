@@ -43,7 +43,12 @@ def create_state(config: NCAConfig) -> train_state.TrainState:
     return state
 
 
-def create_cell_update_fn(config: NCAConfig) -> Callable:
+def create_cell_update_fn(
+    config: NCAConfig,
+    model_fn: UpdateModel,
+    use_jit: bool = True,
+    
+    ) -> Callable:
     # create perception kernels for updating the state grid
     kernel_x, kernel_y = create_perception_kernel(
         input_size=config.model_output_len,
@@ -52,17 +57,21 @@ def create_cell_update_fn(config: NCAConfig) -> Callable:
     )
 
     # define a function to update the cell state grid using the provided model function and parameters
-    def cell_update_fn(key, state_grid, model_fn, params):
+    def cell_update_fn(key, state_grid, params):
         # call the cell_update function with the provided inputs and the perception kernels
         return cell_update(
-            key,
-            state_grid,
-            model_fn,
-            params,
-            kernel_x,
-            kernel_y,
+            key=key,
+            state_grid=state_grid,
+            params=params,
+            model_fn=model_fn,
+            kernel_x=kernel_x,
+            kernel_y=kernel_y,
             update_prob=0.5,
         )
+
+    # if we want to use jit, then jit the cell_update_fn function
+    if use_jit:
+        cell_update_fn = jax.jit(cell_update_fn)
 
     # return the cell_update_fn function
     return cell_update_fn
@@ -97,7 +106,7 @@ def train_step(
         ) -> Tuple[jnp.ndarray, jnp.ndarray]:
             key, state_grid = vals
             _, key = jax.random.split(key)
-            state_grid = cell_update_fn(key, state_grid, state.apply_fn, params)
+            state_grid = cell_update_fn(key, state_grid, params)
             return (key, state_grid)
 
         (key, state_grid) = jax.lax.fori_loop(0, num_steps, body_fun, (key, state_grid))
@@ -133,7 +142,9 @@ def evaluate_step(
         cell_update_fn: A function that updates the cell state grid using the provided model function and parameters.
 
     Returns:
-        A tuple containing a list of RGB state grids, the loss value, and the SSIM score for this step.
+        state_grids: A list of the cell state grids after each step. NCWH format.
+        loss: The loss value for this step.
+        SSIM: The SSIM value for this step.
     """
 
     # define a function that takes the model parameters and cell state grid as inputs and returns the predicted RGB values
@@ -142,7 +153,7 @@ def evaluate_step(
         key = jax.random.PRNGKey(0)
         for i in range(num_steps):
             _, key = jax.random.split(key)
-            state_grid = cell_update_fn(key, state_grid, state.apply_fn, params)
+            state_grid = cell_update_fn(key, state_grid, params)
             state_grids.append(state_grid)
 
         # extract the predicted RGB values and alpha channel from the state grid
