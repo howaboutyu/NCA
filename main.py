@@ -12,11 +12,9 @@ from nca.nca import create_perception_kernel, perceive, cell_update
 
 @dataclass
 class Config:
-    dimensions: tuple = (64, 64)
+    dimensions: tuple = (40, 40)
     model_output_len: int = 16
-
-    batch_size = 32
-
+    batch_size = 16
     num_epochs: int = 100000
     steps_per_epoch: int = 100
     learning_rate: float = 1e-4
@@ -37,7 +35,11 @@ key = jax.random.PRNGKey(0)
 
 # dimensions = (64, 64) + (config.model_output_len * 3,))
 params = model.init(
-    key, jax.random.normal(key, (1, 64, 64, config.model_output_len * 3))
+    key,
+    jax.random.normal(
+        key,
+        (1, config.dimensions[0], config.dimensions[1], config.model_output_len * 3),
+    ),
 )
 
 
@@ -47,13 +49,15 @@ state = train_state.TrainState.create(apply_fn=model, params=params, tx=tx)
 
 
 def get_data():
-    img = cv2.imread("emoji_imgs/skier.png", cv2.IMREAD_UNCHANGED)
+    img = cv2.imread("emoji_imgs/smile.png", cv2.IMREAD_UNCHANGED)
     assert img.shape[-1] == 4
 
     alpha = img[..., -1] > 0
     img = img[..., :3] * alpha[..., np.newaxis]
 
     img = cv2.resize(img, config.dimensions) / 255.0
+
+    cv2.imwrite("target.png", img * 255)
 
     return img
 
@@ -67,9 +71,11 @@ def train_step(state, key, state_grid, target):
     )
 
     def loss_fn(params, state_grid, key):
-        for _ in range(64):
+        def body_fun(i, vals):
+            key, state_grid = vals
+            subkey, key = jax.random.split(key)
             state_grid = cell_update(
-                key,
+                subkey,
                 state_grid,
                 model.apply,
                 params,
@@ -77,7 +83,10 @@ def train_step(state, key, state_grid, target):
                 kernel_y,
                 update_prob=0.5,
             )
-            key, _ = jax.random.split(key)
+            return (key, state_grid)
+
+        num_steps = jax.random.randint(key, (1,), 64, 97)[0]
+        (key, state_grid) = jax.lax.fori_loop(0, 64, body_fun, (key, state_grid))
 
         pred_rgb = state_grid[:, :3]
         alpha = state_grid[:, 3:4]
@@ -131,8 +140,11 @@ def render_state(state, key, state_grid):
 
 
 for epoch in range(config.num_epochs):
-    state_grid = np.zeros((config.batch_size, 64, 64, 16), dtype=np.float32)
-    state_grid[:, 64 // 2, 64 // 2, 3:] = 1.0
+    state_grid = np.zeros(
+        (config.batch_size, config.dimensions[0], config.dimensions[1], 16),
+        dtype=np.float32,
+    )
+    state_grid[:, config.dimensions[0] // 2, config.dimensions[1] // 2, 3:] = 1.0
     target = np.asarray([get_data()] * config.batch_size)
 
     # NHWC -> NCHW
