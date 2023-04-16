@@ -98,7 +98,7 @@ def cell_update(
     # NCHW -> NHWC
     perceived_grid = jnp.transpose(perceived_grid, (0, 2, 3, 1))
 
-    ds = model_fn(params, perceived_grid)  # -> NHWC
+    ds = model_fn.apply(params, perceived_grid)  # -> NHWC
 
     # Stochastic update
     rand_mask = jax.random.uniform(key, shape=ds.shape[:-1]) < update_prob
