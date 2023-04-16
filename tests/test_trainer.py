@@ -9,7 +9,7 @@ import numpy as np
 from functools import partial
 
 from nca.model import UpdateModel
-from nca.trainer import create_state, train_step, create_cell_update_fn
+from nca.trainer import create_state, train_step, create_cell_update_fn, evaluate_step
 from nca.config import NCAConfig
 from nca.utils import NCWH_to_NHWC, NHWC_to_NCWH
 
@@ -56,12 +56,35 @@ def test_cell_update_fn(config):
 
 def test_train_step(config, dummy_state):
     key = jax.random.PRNGKey(0)
-    state_grid = jnp.zeros((1,) + config.dimensions + (config.model_output_len,))
-    target = jnp.zeros((1,) + config.dimensions + (3,))
+    state_grid = jnp.zeros(
+        (config.batch_size,) + config.dimensions + (config.model_output_len,)
+    )
+    target = jnp.zeros((config.batch_size,) + config.dimensions + (3,))
 
     cell_update_fn = create_cell_update_fn(config)
 
     state_grid = NHWC_to_NCWH(state_grid)
     target = NHWC_to_NCWH(target)
 
-    train_step(key, dummy_state, state_grid, target, cell_update_fn)
+    train_step(key, dummy_state, state_grid, target, cell_update_fn, num_steps=14)
+
+
+def test_eval_step(config, dummy_state):
+    key = jax.random.PRNGKey(0)
+    bs = 6
+    state_grid = jnp.zeros((bs,) + config.dimensions + (config.model_output_len,))
+    target = jnp.zeros((bs,) + config.dimensions + (3,))
+
+    cell_update_fn = create_cell_update_fn(config)
+
+    state_grid = NHWC_to_NCWH(state_grid)
+    target = NHWC_to_NCWH(target)
+
+    state_grids, loss, ssim = evaluate_step(
+        dummy_state, state_grid, target, cell_update_fn, num_steps=11
+    )
+    _, loss_no_reduce, _ = evaluate_step(
+        dummy_state, state_grid, target, cell_update_fn, num_steps=11, reduce_loss=False
+    )
+    assert len(state_grids) == 11
+    assert loss_no_reduce.shape == (bs, 3, 32, 32)

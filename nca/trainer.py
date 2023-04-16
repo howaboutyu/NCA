@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 from typing import Tuple, List, Dict, Any, Callable
+import tensorflow as tf
 
 from nca.model import UpdateModel
 from nca.nca import create_perception_kernel, perceive, cell_update
@@ -73,6 +74,7 @@ def train_step(
     state_grid: jnp.ndarray,
     target: jnp.ndarray,
     cell_update_fn: Callable,
+    num_steps: int = 64,
 ) -> Tuple[train_state.TrainState, float]:
     """Runs a single training step.
 
@@ -87,25 +89,61 @@ def train_step(
         A tuple containing the updated Flax training state and the loss value for this step.
     """
 
-    # define a loss function that takes the model parameters, cell state grid, and random key as inputs
     def loss_fn(
         params: jnp.ndarray, state_grid: jnp.ndarray, key: jnp.ndarray
     ) -> jnp.ndarray:
-        # define a function to update the cell state grid for a fixed number of steps
         def body_fun(
             i: int, vals: Tuple[jnp.ndarray, jnp.ndarray]
         ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-            # unpack the current state key and grid from the input tuple
             key, state_grid = vals
-            # split the key to generate a new subkey for each step
             _, key = jax.random.split(key)
-            # call the cell_update_fn with the current inputs to update the state grid
             state_grid = cell_update_fn(key, state_grid, state.apply_fn, params)
-            # return the updated key and state grid as a tuple
             return (key, state_grid)
 
-        # run the body_fun function for a fixed number of iterations using a loop
-        (key, state_grid) = jax.lax.fori_loop(0, 64, body_fun, (key, state_grid))
+        (key, state_grid) = jax.lax.fori_loop(0, num_steps, body_fun, (key, state_grid))
+
+        pred_rgb = state_grid[:, :3]
+        alpha = state_grid[:, 3:4]
+        alpha = jnp.clip(alpha, 0, 1)
+        pred_rgb = pred_rgb * alpha
+
+        return jnp.mean(jnp.square(pred_rgb - target))
+
+    grad_fn = jax.value_and_grad(loss_fn)
+    loss, grad = grad_fn(state.params, state_grid, key)
+    state = state.apply_gradients(grads=grad)
+
+    return state, loss
+
+
+def evaluate_step(
+    state: train_state.TrainState,
+    state_grid: jnp.ndarray,
+    target: jnp.ndarray,
+    cell_update_fn: Callable,
+    num_steps: int = 64,
+    reduce_loss: bool = True,
+) -> Tuple[List[jnp.ndarray], float, float]:
+    """Runs a single evaluation step.
+
+    Args:
+        state: The current Flax training state.
+        state_grid: The current cell state grid.
+        target: The target RGB values.
+        cell_update_fn: A function that updates the cell state grid using the provided model function and parameters.
+
+    Returns:
+        A tuple containing a list of RGB state grids, the loss value, and the SSIM score for this step.
+    """
+
+    # define a function that takes the model parameters and cell state grid as inputs and returns the predicted RGB values
+    def predict_fn(params: jnp.ndarray, state_grid: jnp.ndarray) -> jnp.ndarray:
+        state_grids = []
+        key = jax.random.PRNGKey(0)
+        for i in range(num_steps):
+            _, key = jax.random.split(key)
+            state_grid = cell_update_fn(key, state_grid, state.apply_fn, params)
+            state_grids.append(state_grid)
 
         # extract the predicted RGB values and alpha channel from the state grid
         pred_rgb = state_grid[:, :3]
@@ -114,14 +152,23 @@ def train_step(
         alpha = jnp.clip(alpha, 0, 1)
         pred_rgb = pred_rgb * alpha
 
-        return jnp.mean(jnp.square(pred_rgb - target))
+        return pred_rgb, state_grids
 
-    # define a function that computes the gradient of the loss function with respect to the model parameters
-    grad_fn = jax.value_and_grad(loss_fn)
-    # compute the loss and gradient using the current state parameters, cell state grid, and random key
-    loss, grad = grad_fn(state.params, state_grid, key)
-    # apply the computed gradients to the current state to update the parameters
-    state = state.apply_gradients(grads=grad)
+    # call the predict_fn with the current state parameters and cell state grid to get the predicted RGB values
+    pred_rgb, state_grids = predict_fn(state.params, state_grid)
+    # convert the predicted RGB values and target to TensorFlow tensors
+    pred_rgb_tf = tf.convert_to_tensor(pred_rgb)
+    pred_rgb_tf = tf.transpose(pred_rgb_tf, perm=[0, 2, 3, 1])
+    tf_target = tf.convert_to_tensor(target)
+    tf_target = tf.transpose(tf_target, perm=[0, 2, 3, 1])
 
-    # return the updated state and loss
-    return state, loss
+    # compute the SSIM score between the predicted and target images using TensorFlow
+    ssim = tf.reduce_mean(tf.image.ssim(pred_rgb_tf, tf_target, max_val=1.0))
+    # compute the loss between the predicted and target images using JAX
+    if reduce_loss:
+        loss = jnp.mean(jnp.square(pred_rgb - target))
+    else:
+        loss = jnp.square(pred_rgb - target)
+
+    # return the predicted RGB values, loss, and SSIM score as a tuple
+    return state_grids, loss, ssim
