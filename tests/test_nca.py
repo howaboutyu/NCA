@@ -53,6 +53,6 @@ def test_update():
     )
 
     # Compute the update with update_prob=1.0
-    y = cell_update(key, x, model.apply, params, kernel_x, kernel_y, update_prob=0.5)
+    y = cell_update(key, x, model, params, kernel_x, kernel_y, update_prob=0.5)
 
     assert y.shape == (4, 16, 32, 32)
