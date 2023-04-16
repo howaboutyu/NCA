@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Tuple, List, Dict, Any, Callable
 import numpy as np
 import jax
+import cv2
 
 
 @dataclass
@@ -33,3 +34,16 @@ class NCADataGenerator:
 
     def update_pool(self, indices: np.ndarray, new_states: np.ndarray):
         self.pool[indices] = new_states
+
+    def get_target(self, filename: str) -> np.ndarray:
+        img = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+        assert img.shape[2] == 4, "Image must have 4 channels"
+        alpha = img[..., -1] > 0
+        img = img[..., :3] * alpha[..., np.newaxis]
+        img = cv2.resize(img, self.dimensions)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = img / 255.0
+
+        target = np.asarray([img] * self.batch_size)
+
+        return target
