@@ -16,15 +16,15 @@ class NCADataGenerator:
 
     def __post_init__(self):
         self.seed_state = np.zeros(
-            (self.dimensions[0], self.dimensions[1], self.model_output_len)
+            (self.model_output_len, self.dimensions[0], self.dimensions[1])
         )
 
         # set chemical channels 1, at the center of the grid
-        self.seed_state[self.dimensions[0] // 2, self.dimensions[1] // 2, 3:] = 1.0
+        self.seed_state[3:, self.dimensions[0] // 2, self.dimensions[1] // 2] = 1.0
 
         self.pool = np.asarray([self.seed_state] * self.pool_size)
 
-    def sample(self, key: np.ndarray) -> np.ndarray:
+    def sample(self, key: Any) -> Tuple[np.ndarray, jax.numpy.ndarray]:
         # sample a batch of random indices from the pool
         indices = jax.random.randint(
             key, shape=(self.batch_size,), minval=0, maxval=self.pool_size
@@ -45,5 +45,7 @@ class NCADataGenerator:
         img = img / 255.0
 
         target = np.asarray([img] * self.batch_size)
+
+        target = np.transpose(target, (0, 3, 1, 2))
 
         return target
