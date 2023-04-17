@@ -9,14 +9,22 @@ import numpy as np
 from functools import partial
 
 from nca.model import UpdateModel
-from nca.trainer import create_state, train_step, create_cell_update_fn, evaluate_step
+from nca.trainer import (
+    create_state,
+    train_step,
+    create_cell_update_fn,
+    evaluate_step,
+    train_and_evaluate,
+)
 from nca.config import NCAConfig
 from nca.utils import NCWH_to_NHWC, NHWC_to_NCWH
 
 
 @pytest.fixture
 def config():
-    return NCAConfig(dimensions=(32, 32), model_output_len=16, batch_size=1)
+    return NCAConfig(
+        dimensions=(32, 32), model_output_len=16, batch_size=1, num_steps=2
+    )
 
 
 @pytest.fixture
@@ -33,7 +41,6 @@ def test_create_state(config):
 
 
 def test_cell_update_fn(config):
-
     key = jax.random.PRNGKey(0)
     state_grid = jnp.zeros((1,) + config.dimensions + (config.model_output_len,))
     state_grid = NHWC_to_NCWH(state_grid)
@@ -89,3 +96,7 @@ def test_eval_step(config, dummy_state):
     )
     assert len(state_grids) == 11
     assert loss_no_reduce.shape == (bs, 3, 32, 32)
+
+
+def test_train_and_evaluate(config):
+    train_and_evaluate(config)

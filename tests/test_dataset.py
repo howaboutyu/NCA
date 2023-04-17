@@ -12,7 +12,7 @@ def generator():
 
 
 def test_init(generator):
-    assert generator.pool.shape == (100, 40, 40, 16)
+    assert generator.pool.shape == (100, 16, 40, 40)
 
 
 def test_sample(generator):
@@ -25,12 +25,12 @@ def test_sample(generator):
     pool2, indices2 = generator.sample(subkey)
 
     assert not np.array_equal(indices1, indices2)
-    assert pool2.shape == (32, 40, 40, 16)
+    assert pool2.shape == (32, 16, 40, 40)
 
 
 def test_update_pool(generator):
     indices = np.array([0, 1, 2, 3])
-    new_states = np.ones((4, 40, 40, 16))
+    new_states = np.ones((4, 16, 40, 40))
 
     generator.update_pool(indices, new_states)
 
@@ -39,4 +39,4 @@ def test_update_pool(generator):
 
 def test_get_target(generator):
     target = generator.get_target("emoji_imgs/skier.png")
-    assert target.shape == (32, 40, 40, 3)
+    assert target.shape == (32, 3, 40, 40)
