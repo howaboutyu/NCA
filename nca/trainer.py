@@ -7,16 +7,17 @@ import cv2
 import numpy as np
 from typing import Tuple, List, Dict, Any, Callable
 import tensorflow as tf
+from tqdm import tqdm
 
 from nca.model import UpdateModel
 from nca.nca import create_perception_kernel, perceive, cell_update
 from nca.config import NCAConfig
+from nca.dataset import NCADataGenerator
 
 
 def create_state(config: NCAConfig) -> train_state.TrainState:
     learning_rate_schedule = optax.cosine_decay_schedule(
-        init_value=config.learning_rate,
-        decay_steps=config.num_epochs * config.steps_per_epoch,
+        init_value=config.learning_rate, decay_steps=config.num_steps
     )
 
     tx = optax.adam(learning_rate=learning_rate_schedule)
@@ -47,8 +48,7 @@ def create_cell_update_fn(
     config: NCAConfig,
     model_fn: UpdateModel,
     use_jit: bool = True,
-    
-    ) -> Callable:
+) -> Callable:
     # create perception kernels for updating the state grid
     kernel_x, kernel_y = create_perception_kernel(
         input_size=config.model_output_len,
@@ -183,3 +183,41 @@ def evaluate_step(
 
     # return the predicted RGB values, loss, and SSIM score as a tuple
     return state_grids, loss, ssim
+
+
+def train_and_evaluate(config: NCAConfig):
+    """Runs the training and evaluation loop.
+
+    Args:
+        config: The NCAConfig object containing the training configuration.
+    """
+
+    state = create_state(config)
+
+    cell_update_fn = create_cell_update_fn(config, state.apply_fn)
+
+    dataset_generator = NCADataGenerator(
+        pool_size=config.pool_size,
+        batch_size=config.batch_size,
+        dimensions=config.dimensions,
+        model_output_len=config.model_output_len,
+    )
+
+    train_target = dataset_generator.get_target(config.target_filename)
+
+    # this is experiment 1 so we will use the same random key for all of the training
+    data_key = jax.random.PRNGKey(0)
+
+    # create a random key for generating subkeys
+    key = jax.random.PRNGKey(0)
+
+    for step in range(config.num_steps):
+        # get the training data
+        state_grid, _ = dataset_generator.sample(data_key)
+        # split the random key into two subkeys
+        key, _ = jax.random.split(key)
+        # create a random number between 64 and 96
+        num_steps = jax.random.randint(key, shape=(), minval=64, maxval=96)
+        state, loss = train_step(
+            key, state, state_grid, train_target, cell_update_fn, num_steps
+        )
