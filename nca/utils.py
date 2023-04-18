@@ -8,7 +8,7 @@ import cv2
 from typing import List, Any, Union
 
 
-def NCWH_to_NHWC(x: jnp.ndarray) -> jnp.ndarray:
+def NCHW_to_NHWC(x: jnp.ndarray) -> jnp.ndarray:
     """Converts an array from the NCWH format to the NHWC format.
 
     Args:
@@ -85,10 +85,10 @@ def make_video(
     with tempfile.TemporaryDirectory() as tempdir:
         # write images to tempdir
         for i, image in enumerate(images):
-            image = np.asarray(image).astype(np.uint8)
+            image = np.asarray(image[..., :3]).astype(np.uint8)
+            image = np.squeeze(image)
 
             cv2.imwrite(f"{tempdir}/{i}.png", image)
 
-        # create gif
         clip = ImageSequenceClip(glob(f"{tempdir}/*.png"), fps=fps)
         clip.write_videofile(filename, fps=fps)
