@@ -4,3 +4,4 @@ black
 moviepy
 tensorboardX
 pytest
+opencv-python
