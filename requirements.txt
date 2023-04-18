@@ -2,3 +2,4 @@ flax
 optax
 black
 moviepy
+tensorboardX
