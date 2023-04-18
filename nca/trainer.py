@@ -240,8 +240,8 @@ def train_and_evaluate(config: NCAConfig):
         tb_writer.add_scalar("loss", np.asarray(loss), state.step)
 
         if step % config.eval_every == 0:
-            # get the evaluation data
-            state_grid, _ = dataset_generator.sample(data_key)
+            # get the seed
+            seed_grid = dataset_generator.seed_state[np.newaxis, ...]
 
             val_state_grids, loss, ssim = evaluate_step(
                 state, state_grid, train_target, cell_update_fn
