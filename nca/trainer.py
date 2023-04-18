@@ -8,11 +8,15 @@ import numpy as np
 from typing import Tuple, List, Dict, Any, Callable
 import tensorflow as tf
 from tqdm import tqdm
+import os
+from tensorboardX import SummaryWriter
+
 
 from nca.model import UpdateModel
 from nca.nca import create_perception_kernel, perceive, cell_update
 from nca.config import NCAConfig
 from nca.dataset import NCADataGenerator
+from nca.utils import make_video, NCHW_to_NHWC
 
 
 def create_state(config: NCAConfig) -> train_state.TrainState:
@@ -174,6 +178,8 @@ def evaluate_step(
     tf_target = tf.transpose(tf_target, perm=[0, 2, 3, 1])
 
     # compute the SSIM score between the predicted and target images using TensorFlow
+    pred_rgb_tf = tf.cast(pred_rgb_tf, tf.float32)
+    tf_target = tf.cast(tf_target, tf.float32)
     ssim = tf.reduce_mean(tf.image.ssim(pred_rgb_tf, tf_target, max_val=1.0))
     # compute the loss between the predicted and target images using JAX
     if reduce_loss:
@@ -194,6 +200,9 @@ def train_and_evaluate(config: NCAConfig):
 
     state = create_state(config)
 
+    if config.checkpoint_dir:
+        state = checkpoints.restore_checkpoint(config.checkpoint_dir, state)
+
     cell_update_fn = create_cell_update_fn(config, state.apply_fn)
 
     dataset_generator = NCADataGenerator(
@@ -211,13 +220,43 @@ def train_and_evaluate(config: NCAConfig):
     # create a random key for generating subkeys
     key = jax.random.PRNGKey(0)
 
-    for step in range(config.num_steps):
+    tb_writer = SummaryWriter(config.log_dir)
+
+    for step in range(state.step, config.num_steps):
         # get the training data
         state_grid, _ = dataset_generator.sample(data_key)
+
         # split the random key into two subkeys
         key, _ = jax.random.split(key)
+
         # create a random number between 64 and 96
-        num_steps = jax.random.randint(key, shape=(), minval=64, maxval=96)
+        nca_steps = jax.random.randint(key, shape=(), minval=64, maxval=96)
+
         state, loss = train_step(
-            key, state, state_grid, train_target, cell_update_fn, num_steps
+            key, state, state_grid, train_target, cell_update_fn, nca_steps
         )
+
+        print(f"Loss : {loss}")
+        tb_writer.add_scalar("loss", np.asarray(loss), state.step)
+
+        if step % config.eval_every == 0:
+            # get the evaluation data
+            state_grid, _ = dataset_generator.sample(data_key)
+
+            val_state_grids, loss, ssim = evaluate_step(
+                state, state_grid, train_target, cell_update_fn
+            )
+
+            tb_state_grids = np.array(val_state_grids)
+            tb_state_grids = np.squeeze(tb_state_grids)[:, :3][np.newaxis, ...]
+            tb_writer.add_video("val video", vid_tensor=tb_state_grids, fps=5)
+
+            val_state_grids = [NCHW_to_NHWC(grid) for grid in val_state_grids]
+            os.makedirs(config.validation_video_dir, exist_ok=True)
+            output_video_file = os.path.join(config.validation_video_dir, f"{step}.mp4")
+            make_video(val_state_grids, output_video_file)
+
+        if step % config.checkpoint_every == 0 and config.checkpoint_dir:
+            checkpoints.save_checkpoint(
+                config.checkpoint_dir, state, step=state.step, keep=3
+            )
