@@ -230,7 +230,7 @@ def train_and_evaluate(config: NCAConfig):
         key, _ = jax.random.split(key)
 
         # create a random number between 64 and 96
-        nca_steps = jax.random.randint(key, shape=(), minval=64, maxval=96)
+        nca_steps = jax.random.randint(key, shape=(), minval=100, maxval=120)
 
         state, loss = train_step(
             key, state, state_grid, train_target, cell_update_fn, nca_steps
@@ -244,12 +244,18 @@ def train_and_evaluate(config: NCAConfig):
             seed_grid = dataset_generator.seed_state[np.newaxis, ...]
 
             val_state_grids, loss, ssim = evaluate_step(
-                state, seed_grid, train_target[:1], cell_update_fn
+                state, seed_grid, train_target[:1], cell_update_fn, num_steps=120
             )
 
+            tb_writer.add_scalar("val loss", np.asarray(loss), state.step)
+            tb_writer.add_scalar("val ssim", np.asarray(ssim), state.step)
+
             tb_state_grids = np.array(val_state_grids)
+            tb_state_grids = np.clip(tb_state_grids, 0.0, 1.0)
             tb_state_grids = np.squeeze(tb_state_grids)[:, :3][np.newaxis, ...]
-            tb_writer.add_video("val video", vid_tensor=tb_state_grids, fps=5)
+            tb_writer.add_video(
+                f"val video", vid_tensor=tb_state_grids, fps=10, global_step=state.step
+            )
 
             val_state_grids = [NCHW_to_NHWC(grid) for grid in val_state_grids]
             os.makedirs(config.validation_video_dir, exist_ok=True)
