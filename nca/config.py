@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import yaml
 
 
 @dataclass
@@ -16,3 +17,10 @@ class NCAConfig:
     validation_video_dir: str = "validation_videos"
     log_dir: str = "logs"
     log_every: int = 1
+
+
+def load_config(config_file):
+    with open(config_file, "r") as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+
+    return NCAConfig(**config)
