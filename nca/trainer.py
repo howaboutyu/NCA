@@ -244,7 +244,7 @@ def train_and_evaluate(config: NCAConfig):
             seed_grid = dataset_generator.seed_state[np.newaxis, ...]
 
             val_state_grids, loss, ssim = evaluate_step(
-                state, state_grid, train_target, cell_update_fn
+                state, seed_grid, train_target[:1], cell_update_fn
             )
 
             tb_state_grids = np.array(val_state_grids)
