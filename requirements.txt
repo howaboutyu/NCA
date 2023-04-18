@@ -5,3 +5,4 @@ moviepy
 tensorboardX
 pytest
 opencv-python
+tensorflow
