@@ -1,13 +1,8 @@
 import jax
 import jax.numpy as jnp
 
-# REMOVE
 import numpy as np
-
-import matplotlib.pyplot as plt
-import cv2
-
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Tuple, Union
 
 
 def create_perception_kernel(
