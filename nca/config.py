@@ -14,4 +14,5 @@ class NCAConfig:
     checkpoint_dir: str = "checkpoints"
     checkpoint_every: int = 1000
     validation_video_dir: str = "validation_videos"
-    tensorboard_dir: str = "logs"
+    log_dir: str = "logs"
+    log_every: int = 1
