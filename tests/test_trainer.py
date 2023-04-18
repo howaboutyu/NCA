@@ -5,6 +5,7 @@ from flax.training import train_state
 import optax
 from dataclasses import dataclass
 import cv2
+import os
 import numpy as np
 from functools import partial
 
@@ -17,13 +18,20 @@ from nca.trainer import (
     train_and_evaluate,
 )
 from nca.config import NCAConfig
-from nca.utils import NCWH_to_NHWC, NHWC_to_NCWH
+from nca.utils import NCHW_to_NHWC, NHWC_to_NCWH
 
 
 @pytest.fixture
 def config():
     return NCAConfig(
-        dimensions=(32, 32), model_output_len=16, batch_size=1, num_steps=2
+        dimensions=(32, 32),
+        model_output_len=16,
+        batch_size=1,
+        num_steps=2,
+        eval_every=1,
+        checkpoint_dir="/tmp/test_ckpt",
+        checkpoint_every=1,
+        validation_video_dir="/tmp/test_vid",
     )
 
 
@@ -57,7 +65,7 @@ def test_cell_update_fn(config):
     )
 
     new_state_grid = cell_update_fn(key, state_grid, params)
-    new_state_grid = NCWH_to_NHWC(new_state_grid)
+    new_state_grid = NCHW_to_NHWC(new_state_grid)
 
     assert new_state_grid.shape == (1,) + config.dimensions + (config.model_output_len,)
 
@@ -96,7 +104,19 @@ def test_eval_step(config, dummy_state):
     )
     assert len(state_grids) == 11
     assert loss_no_reduce.shape == (bs, 3, 32, 32)
+    assert loss.shape == ()
+    assert ssim.shape == ()
 
 
 def test_train_and_evaluate(config):
     train_and_evaluate(config)
+
+    # check if the checkpoint was saved
+    os.path.exists(config.checkpoint_dir)
+
+    # check if video was saved
+    os.path.exists(config.validation_video_dir)
+
+    # rm testing dirs
+    os.system(f"rm -rf {config.checkpoint_dir}")
+    os.system(f"rm -rf {config.validation_video_dir}")
