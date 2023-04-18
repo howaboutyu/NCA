@@ -20,7 +20,7 @@ def main(argv):
     if FLAGS.mode == "train_and_eval":
         config = load_config(FLAGS.config_path)
 
-        train_and_evaluate(FLAGS.config_path)
+        train_and_evaluate(config)
 
 
 if __name__ == "__main__":
