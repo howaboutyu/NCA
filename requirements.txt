@@ -3,3 +3,4 @@ optax
 black
 moviepy
 tensorboardX
+pytest
