@@ -258,8 +258,10 @@ def train_and_evaluate(config: NCAConfig):
         ) = train_step(key, state, state_grid, train_target, cell_update_fn, nca_steps)
 
         training_grid_array = np.clip(training_grid_array, 0.0, 1.0)
-        training_grid_array = training_grid_array[:, :, :3]
+
         # add_video needs (N, T, C, H, W)
+        alpha = training_grid_array[:, :, 3:4]
+        training_grid_array = training_grid_array[:, :, :3] * alpha
         tb_writer.add_video("training_grid", training_grid_array, state.step, fps=10)
 
         dataset_generator.update_pool(
@@ -281,7 +283,8 @@ def train_and_evaluate(config: NCAConfig):
 
             tb_state_grids = np.array(val_state_grids)
             tb_state_grids = np.clip(tb_state_grids, 0.0, 1.0)
-            tb_state_grids = np.squeeze(tb_state_grids)[:, :3][np.newaxis, ...]
+            alpha = tb_state_grids[:, :, 3:4]
+            tb_state_grids = np.squeeze(tb_state_grids)[:, :3][np.newaxis, ...] * alpha
 
             tb_writer.add_video(
                 f"val video", vid_tensor=tb_state_grids, fps=10, global_step=state.step
