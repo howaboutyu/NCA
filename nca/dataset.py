@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
-from typing import Tuple, List, Dict, Any, Callable
+from typing import Tuple, List, Dict, Any, Callable, Union
 import numpy as np
 import jax
+import jax.numpy as jnp
 import cv2  # type: ignore
 
 Array = Any
@@ -34,8 +35,19 @@ class NCADataGenerator:
 
         return self.pool[indices], indices
 
-    def update_pool(self, indices: np.ndarray, new_states: np.ndarray):
+    def update_pool(
+        self,
+        indices: Any,
+        new_states: np.ndarray,
+        loss_array: Union[jnp.ndarray, None] = None,
+    ):
         self.pool[indices] = new_states
+
+        if loss_array is not None:
+            # get loss for each batch
+            loss_array = np.mean(loss_array, axis=(1, 2, 3))
+            highest_loss_batch_id = np.argmax(loss_array)
+            self.pool[indices[highest_loss_batch_id]] = self.seed_state
 
     def get_target(self, filename: str) -> np.ndarray:
         img = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
