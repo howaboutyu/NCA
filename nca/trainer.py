@@ -47,7 +47,7 @@ def create_state(config: NCAConfig) -> train_state.TrainState:
         tx=tx,
     )
 
-    return state
+    return state, learning_rate_schedule
 
 
 def create_cell_update_fn(
@@ -90,6 +90,7 @@ def train_step(
     target: np.ndarray,
     cell_update_fn: Callable,
     num_steps: Array = 64,
+    apply_grad: bool = True,
 ) -> Tuple[train_state.TrainState, Array, Array, Array, Array]:
     """Runs a single training step.
 
@@ -109,41 +110,37 @@ def train_step(
     ) -> Tuple[Array, Tuple[Array, Array, Array]]:
         # Returns loss reduced over batch and spatial dimensions and loss not reduced over batch and spatial dimensions
 
-        state_grids = []
+        state_grid_sequence = []
         for i in range(num_steps):
             _, key = jax.random.split(key)
             state_grid = cell_update_fn(key, state_grid, params)
-            state_grids.append(state_grid)
+            state_grid_sequence.append(state_grid)
 
         # extract the predicted RGB values and alpha channel from the state grid
         pred_rgb = state_grid[:, :3]
         alpha = state_grid[:, 3:4]
         # clip the alpha channel values to be between 0 and 1
-        alpha = jnp.clip(alpha, 0, 1)
-        pred_rgb = pred_rgb * alpha
-
-        pred_rgb = state_grid[:, :3]
-        alpha = state_grid[:, 3:4]
-        alpha = jnp.clip(alpha, 0, 1)
-        pred_rgb = pred_rgb * alpha
+        pred_rgb = alpha * pred_rgb
 
         # used for visualizing the state grid during training
-        training_state_grid_array = jnp.asarray(state_grids)
+        state_grid_sequence = jnp.asarray(state_grid_sequence)
 
         return jnp.mean(jnp.square(pred_rgb - target)), (
             jnp.square(pred_rgb - target),
             state_grid,
-            training_state_grid_array,
+            state_grid_sequence,
         )
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
+
     (
         loss,
-        (loss_no_reduce, final_state_grid, training_state_grid_array),
+        (loss_no_reduce, final_state_grid, state_grid_sequence),
     ), grad = grad_fn(state.params, state_grid, key)
-    state = state.apply_gradients(grads=grad)
+    if apply_grad:
+        state = state.apply_gradients(grads=grad)
 
-    return state, loss, loss_no_reduce, final_state_grid, training_state_grid_array
+    return state, loss, loss_no_reduce, final_state_grid, state_grid_sequence
 
 
 def evaluate_step(
@@ -170,21 +167,22 @@ def evaluate_step(
 
     # define a function that takes the model parameters and cell state grid as inputs and returns the predicted RGB values
     def predict_fn(params: Any, state_grid: jnp.ndarray) -> Tuple[Array, List[Array]]:
-        state_grids = []
+        state_grid_sequence = []
         key = jax.random.PRNGKey(0)
         for i in range(num_steps):
             _, key = jax.random.split(key)
             state_grid = cell_update_fn(key, state_grid, params)
-            state_grids.append(state_grid)
+            state_grid_sequence.append(state_grid)
 
         # extract the predicted RGB values and alpha channel from the state grid
+        state_grid = jnp.clip(state_grid, 0.0, 1.0)
         pred_rgb = state_grid[:, :3]
         alpha = state_grid[:, 3:4]
-        # clip the alpha channel values to be between 0 and 1
-        alpha = jnp.clip(alpha, 0, 1)
-        pred_rgb = pred_rgb * alpha
 
-        return pred_rgb, state_grids
+        # clip the alpha channel values to be between 0 and 1
+        pred_rgb = alpha * pred_rgb
+
+        return pred_rgb, state_grid_sequence
 
     # call the predict_fn with the current state parameters and cell state grid to get the predicted RGB values
     pred_rgb, state_grids = predict_fn(state.params, state_grid)
@@ -215,7 +213,7 @@ def train_and_evaluate(config: NCAConfig):
         config: The NCAConfig object containing the training configuration.
     """
 
-    state = create_state(config)
+    state, learning_rate_schedule = create_state(config)
 
     if config.checkpoint_dir:
         state = checkpoints.restore_checkpoint(config.checkpoint_dir, state)
@@ -231,7 +229,7 @@ def train_and_evaluate(config: NCAConfig):
 
     train_target = dataset_generator.get_target(config.target_filename)
 
-    # this is experiment 1 so we will use the same random key for all of the training
+    # key for data generator
     data_key = jax.random.PRNGKey(0)
 
     # create a random key for generating subkeys
@@ -241,53 +239,91 @@ def train_and_evaluate(config: NCAConfig):
 
     for step in range(state.step, config.num_steps):
         # get the training data
-        state_grid, state_grid_indices = dataset_generator.sample(data_key)
+
+        state_grids, state_grid_indices = dataset_generator.sample(data_key)
 
         # split the random key into two subkeys
-        key, _ = jax.random.split(key)
 
         # create a random number between 64 and 96
-        nca_steps = jax.random.randint(key, shape=(), minval=100, maxval=120)
+        nca_steps = jax.random.randint(key, shape=(), minval=64, maxval=96)
+
+        # This call of train_step will not optimize the model, it gets the loss for this batch
+        # will use the loss_no_reduce [batch_size, ...] to determine which final_state_grid to replace
+        # in the training batch
+        (
+            _,
+            _,
+            loss_no_reduce,
+            final_state_grid,
+            _,
+        ) = train_step(
+            key,
+            state,
+            state_grids,
+            train_target,
+            cell_update_fn,
+            nca_steps,
+            apply_grad=False,
+        )
+
+        # Update the pool with the seed
+        dataset_generator.update_pool(
+            state_grid_indices, final_state_grid, loss_no_reduce
+        )
+
+        # train it, with at least one seed state
+        state_grids, state_grid_indices = dataset_generator.sample(data_key)
+
+        # create a random number of steps for nca
+        nca_steps = jax.random.randint(key, shape=(), minval=64, maxval=96)
 
         (
             state,
             loss,
-            loss_no_reduce,
+            _,
             final_training_grid,
             training_grid_array,
-        ) = train_step(key, state, state_grid, train_target, cell_update_fn, nca_steps)
+        ) = train_step(key, state, state_grids, train_target, cell_update_fn, nca_steps)
 
-        training_grid_array = np.clip(training_grid_array, 0.0, 1.0)
+        print(f"Step : {step}, loss : {loss}")
 
-        # add_video needs (N, T, C, H, W)
-        alpha = training_grid_array[:, :, 3:4]
-        training_grid_array = training_grid_array[:, :, :3] * alpha
-        tb_writer.add_video("training_grid", training_grid_array, state.step, fps=10)
+        if step % config.log_every == 0:
+            training_grid_array = np.clip(training_grid_array, 0.0, 1.0)
 
-        dataset_generator.update_pool(
-            state_grid_indices, final_training_grid, loss_no_reduce
-        )
+            alpha = training_grid_array[:, :, 3:4]
+            training_grid_array = alpha * training_grid_array[:, :, :3]
 
-        tb_writer.add_scalar("loss", np.asarray(loss), state.step)
+            # training_grid_array has shape (T, N, C, H, W) but add_video needs (N, T, C, H, W)
+            training_grid_array = np.transpose(training_grid_array, (1, 0, 2, 3, 4))
+            tb_writer.add_video(
+                "training_grid", training_grid_array, state.step, fps=10
+            )
+
+            tb_writer.add_scalar("loss", np.asarray(loss), state.step)
+
+            lr = learning_rate_schedule(state.step)
+            tb_writer.add_scalar("lr", np.asarray(lr), state.step)
 
         if step % config.eval_every == 0:
             # get the seed
             seed_grid = dataset_generator.seed_state[np.newaxis, ...]
 
             val_state_grids, loss, ssim = evaluate_step(
-                state, seed_grid, train_target[:1], cell_update_fn, num_steps=120
+                state, seed_grid, train_target[:1], cell_update_fn, num_steps=1200
             )
 
-            tb_writer.add_scalar("val loss", np.asarray(loss), state.step)
-            tb_writer.add_scalar("val ssim", np.asarray(ssim), state.step)
+            tb_writer.add_scalar("val_loss", np.asarray(loss), state.step)
+            tb_writer.add_scalar("val_ssim", np.asarray(ssim), state.step)
 
             tb_state_grids = np.array(val_state_grids)
             tb_state_grids = np.clip(tb_state_grids, 0.0, 1.0)
-            alpha = tb_state_grids[:, :, 3:4]
-            tb_state_grids = np.squeeze(tb_state_grids)[:, :3][np.newaxis, ...] * alpha
+            tb_state_grids = np.squeeze(tb_state_grids)
+            alpha = tb_state_grids[:, 3:4]
+            tb_state_grids = alpha * tb_state_grids[:, :3]
+            tb_state_grids = tb_state_grids[np.newaxis, ...]
 
             tb_writer.add_video(
-                f"val video", vid_tensor=tb_state_grids, fps=10, global_step=state.step
+                f"val_video", vid_tensor=tb_state_grids, fps=30, global_step=state.step
             )
 
             val_state_grids = [NCHW_to_NHWC(grid) for grid in val_state_grids]
@@ -299,3 +335,6 @@ def train_and_evaluate(config: NCAConfig):
             checkpoints.save_checkpoint(
                 config.checkpoint_dir, state, step=state.step, keep=3
             )
+
+        key, _ = jax.random.split(key)
+        data_key, _ = jax.random.split(data_key)
