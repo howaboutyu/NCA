@@ -90,7 +90,7 @@ def train_step(
     target: np.ndarray,
     cell_update_fn: Callable,
     num_steps: Array = 64,
-) -> Tuple[train_state.TrainState, Array, Array]:
+) -> Tuple[train_state.TrainState, Array, Array, Array, Array]:
     """Runs a single training step.
 
     Args:
@@ -101,36 +101,49 @@ def train_step(
         cell_update_fn: A function that updates the cell state grid using the provided model function and parameters.
 
     Returns:
-        A tuple containing the updated Flax training state and the loss value for this step.
+        *TODO*
     """
 
     def loss_fn(
         params: jnp.ndarray, state_grid: jnp.ndarray, key: jnp.ndarray
-    ) -> Tuple[Any, Any]:
+    ) -> Tuple[Array, Tuple[Array, Array, Array]]:
         # Returns loss reduced over batch and spatial dimensions and loss not reduced over batch and spatial dimensions
 
-        def body_fun(
-            i: int, vals: Tuple[jax.random.PRNGKeyArray, jnp.ndarray]
-        ) -> Tuple[jax.random.PRNGKeyArray, jnp.ndarray]:
-            key, state_grid = vals
+        state_grids = []
+        for i in range(num_steps):
             _, key = jax.random.split(key)
             state_grid = cell_update_fn(key, state_grid, params)
-            return (key, state_grid)
+            state_grids.append(state_grid)
 
-        (key, state_grid) = jax.lax.fori_loop(0, num_steps, body_fun, (key, state_grid))
+        # extract the predicted RGB values and alpha channel from the state grid
+        pred_rgb = state_grid[:, :3]
+        alpha = state_grid[:, 3:4]
+        # clip the alpha channel values to be between 0 and 1
+        alpha = jnp.clip(alpha, 0, 1)
+        pred_rgb = pred_rgb * alpha
 
         pred_rgb = state_grid[:, :3]
         alpha = state_grid[:, 3:4]
         alpha = jnp.clip(alpha, 0, 1)
         pred_rgb = pred_rgb * alpha
 
-        return jnp.mean(jnp.square(pred_rgb - target)), jnp.square(pred_rgb - target)
+        # used for visualizing the state grid during training
+        training_state_grid_array = jnp.asarray(state_grids)
+
+        return jnp.mean(jnp.square(pred_rgb - target)), (
+            jnp.square(pred_rgb - target),
+            state_grid,
+            training_state_grid_array,
+        )
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-    (loss, loss_no_reduce), grad = grad_fn(state.params, state_grid, key)
+    (
+        loss,
+        (loss_no_reduce, final_state_grid, training_state_grid_array),
+    ), grad = grad_fn(state.params, state_grid, key)
     state = state.apply_gradients(grads=grad)
 
-    return state, loss, loss_no_reduce
+    return state, loss, loss_no_reduce, final_state_grid, training_state_grid_array
 
 
 def evaluate_step(
@@ -228,7 +241,7 @@ def train_and_evaluate(config: NCAConfig):
 
     for step in range(state.step, config.num_steps):
         # get the training data
-        state_grid, _ = dataset_generator.sample(data_key)
+        state_grid, state_grid_indices = dataset_generator.sample(data_key)
 
         # split the random key into two subkeys
         key, _ = jax.random.split(key)
@@ -236,11 +249,23 @@ def train_and_evaluate(config: NCAConfig):
         # create a random number between 64 and 96
         nca_steps = jax.random.randint(key, shape=(), minval=100, maxval=120)
 
-        state, loss, loss_no_reduce = train_step(
-            key, state, state_grid, train_target, cell_update_fn, nca_steps
+        (
+            state,
+            loss,
+            loss_no_reduce,
+            final_training_grid,
+            training_grid_array,
+        ) = train_step(key, state, state_grid, train_target, cell_update_fn, nca_steps)
+
+        training_grid_array = np.clip(training_grid_array, 0.0, 1.0)
+        training_grid_array = training_grid_array[:, :, :3]
+        # add_video needs (N, T, C, H, W)
+        tb_writer.add_video("training_grid", training_grid_array, state.step, fps=10)
+
+        dataset_generator.update_pool(
+            state_grid_indices, final_training_grid, loss_no_reduce
         )
 
-        print(f"Loss : {loss}")
         tb_writer.add_scalar("loss", np.asarray(loss), state.step)
 
         if step % config.eval_every == 0:
@@ -257,6 +282,7 @@ def train_and_evaluate(config: NCAConfig):
             tb_state_grids = np.array(val_state_grids)
             tb_state_grids = np.clip(tb_state_grids, 0.0, 1.0)
             tb_state_grids = np.squeeze(tb_state_grids)[:, :3][np.newaxis, ...]
+
             tb_writer.add_video(
                 f"val video", vid_tensor=tb_state_grids, fps=10, global_step=state.step
             )
