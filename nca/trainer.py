@@ -18,6 +18,8 @@ from nca.config import NCAConfig
 from nca.dataset import NCADataGenerator
 from nca.utils import make_video, NCHW_to_NHWC
 
+Array = Any
+
 
 def create_state(config: NCAConfig) -> train_state.TrainState:
     learning_rate_schedule = optax.cosine_decay_schedule(
@@ -50,7 +52,7 @@ def create_state(config: NCAConfig) -> train_state.TrainState:
 
 def create_cell_update_fn(
     config: NCAConfig,
-    model_fn: UpdateModel,
+    model_fn: Callable[..., Any],
     use_jit: bool = True,
 ) -> Callable:
     # create perception kernels for updating the state grid
@@ -82,13 +84,13 @@ def create_cell_update_fn(
 
 
 def train_step(
-    key: jnp.ndarray,
+    key: jax.random.PRNGKeyArray,
     state: train_state.TrainState,
-    state_grid: jnp.ndarray,
-    target: jnp.ndarray,
+    state_grid: np.ndarray,
+    target: np.ndarray,
     cell_update_fn: Callable,
-    num_steps: int = 64,
-) -> Tuple[train_state.TrainState, float]:
+    num_steps: Array = 64,
+) -> Tuple[train_state.TrainState, Array, Array]:
     """Runs a single training step.
 
     Args:
@@ -104,12 +106,12 @@ def train_step(
 
     def loss_fn(
         params: jnp.ndarray, state_grid: jnp.ndarray, key: jnp.ndarray
-    ) -> jnp.ndarray:
+    ) -> Tuple[Any, Any]:
         # Returns loss reduced over batch and spatial dimensions and loss not reduced over batch and spatial dimensions
 
         def body_fun(
-            i: int, vals: Tuple[jnp.ndarray, jnp.ndarray]
-        ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+            i: int, vals: Tuple[jax.random.PRNGKeyArray, jnp.ndarray]
+        ) -> Tuple[jax.random.PRNGKeyArray, jnp.ndarray]:
             key, state_grid = vals
             _, key = jax.random.split(key)
             state_grid = cell_update_fn(key, state_grid, params)
@@ -133,12 +135,12 @@ def train_step(
 
 def evaluate_step(
     state: train_state.TrainState,
-    state_grid: jnp.ndarray,
-    target: jnp.ndarray,
+    state_grid: Array,
+    target: Array,
     cell_update_fn: Callable,
     num_steps: int = 64,
     reduce_loss: bool = True,
-) -> Tuple[List[jnp.ndarray], float, float]:
+) -> Tuple[List[Array], float, float]:
     """Runs a single evaluation step.
 
     Args:
@@ -154,7 +156,7 @@ def evaluate_step(
     """
 
     # define a function that takes the model parameters and cell state grid as inputs and returns the predicted RGB values
-    def predict_fn(params: jnp.ndarray, state_grid: jnp.ndarray) -> jnp.ndarray:
+    def predict_fn(params: Any, state_grid: jnp.ndarray) -> Tuple[Array, List[Array]]:
         state_grids = []
         key = jax.random.PRNGKey(0)
         for i in range(num_steps):

@@ -75,12 +75,12 @@ def perceive(
 
 
 def cell_update(
-    key: jax.random.PRNGKey,
-    state_grid: jnp.ndarray,
-    model_fn: Callable[[Any, jnp.ndarray], jnp.ndarray],
-    params: Any,
-    kernel_x: jnp.ndarray,
-    kernel_y: jnp.ndarray,
+    key: jax.Array,
+    state_grid: jax.Array,
+    model_fn: Any,
+    params: jax.Array,
+    kernel_x: jax.Array,
+    kernel_y: jax.Array,
     update_prob: float = 0.5,
 ) -> jnp.ndarray:
     get_alive_state = lambda x: x[:, 3, :, :]

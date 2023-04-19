@@ -1,18 +1,20 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Tuple, List, Dict, Any, Callable
 import numpy as np
 import jax
 import cv2
+
+Array = Any
 
 
 @dataclass
 class NCADataGenerator:
     pool_size: int
     batch_size: int
-    dimensions: Tuple[int, int]
+    dimensions: Tuple[Any, ...]
     model_output_len: int
-    seed_state: np.ndarray = None
-    pool: np.ndarray = None
+    seed_state: np.ndarray = field(init=False)
+    pool: np.ndarray = field(init=False)
 
     def __post_init__(self):
         self.seed_state = np.zeros(
@@ -24,7 +26,7 @@ class NCADataGenerator:
 
         self.pool = np.asarray([self.seed_state] * self.pool_size)
 
-    def sample(self, key: Any) -> Tuple[np.ndarray, jax.numpy.ndarray]:
+    def sample(self, key: Any) -> Tuple[np.ndarray, jax.Array]:
         # sample a batch of random indices from the pool
         indices = jax.random.randint(
             key, shape=(self.batch_size,), minval=0, maxval=self.pool_size
