@@ -1,15 +1,15 @@
 import jax
 import jax.numpy as jnp
 from flax.training import checkpoints, train_state
-import optax
+import optax  # type: ignore
 from dataclasses import dataclass
-import cv2
+import cv2  # type: ignore
 import numpy as np
 from typing import Tuple, List, Dict, Any, Callable
-import tensorflow as tf
-from tqdm import tqdm
+import tensorflow as tf  # type: ignore
+from tqdm import tqdm  # type: ignore
 import os
-from tensorboardX import SummaryWriter
+from tensorboardX import SummaryWriter  # type: ignore
 
 
 from nca.model import UpdateModel

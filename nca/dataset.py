@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Tuple, List, Dict, Any, Callable
 import numpy as np
 import jax
-import cv2
+import cv2  # type: ignore
 
 Array = Any
 

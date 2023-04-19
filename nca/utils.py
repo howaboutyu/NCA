@@ -1,9 +1,9 @@
 import jax.numpy as jnp
 import numpy as np
-from moviepy.editor import ImageSequenceClip
+from moviepy.editor import ImageSequenceClip  # type: ignore
 import tempfile
 from glob import glob
-import cv2
+import cv2  # type: ignore
 
 from typing import List, Any, Union
 

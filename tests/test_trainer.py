@@ -2,9 +2,9 @@ import pytest
 import jax
 import jax.numpy as jnp
 from flax.training import train_state
-import optax
+import optax  # type: ignore
 from dataclasses import dataclass
-import cv2
+import cv2  # type: ignore
 import os
 import numpy as np
 from functools import partial

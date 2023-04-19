@@ -1,5 +1,5 @@
-import tensorflow as tf
-from absl import app, flags
+import tensorflow as tf  # type: ignore
+from absl import app, flags  # type: ignore
 
 
 from nca.trainer import train_and_evaluate

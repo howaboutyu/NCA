@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-import yaml
+import yaml  # type: ignore
 
 
 @dataclass
@@ -19,7 +19,7 @@ class NCAConfig:
     log_every: int = 1
 
 
-def load_config(config_file):
+def load_config(config_file: str) -> NCAConfig:
     with open(config_file, "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
