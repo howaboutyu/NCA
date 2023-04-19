@@ -47,6 +47,7 @@ class NCADataGenerator:
             # get loss for each batch
             loss_array = np.mean(loss_array, axis=(1, 2, 3))
             highest_loss_batch_id = np.argmax(loss_array)
+            self.pool[indices] = new_states
             self.pool[indices[highest_loss_batch_id]] = self.seed_state
 
     def get_target(self, filename: str) -> np.ndarray:
