@@ -79,8 +79,8 @@ def cell_update(
     state_grid: jnp.ndarray,
     model_fn: Callable[[Any, jnp.ndarray], jnp.ndarray],
     params: Any,
-    kernel_x: int,
-    kernel_y: int,
+    kernel_x: jnp.ndarray,
+    kernel_y: jnp.ndarray,
     update_prob: float = 0.5,
 ) -> jnp.ndarray:
     get_alive_state = lambda x: x[:, 3, :, :]

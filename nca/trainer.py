@@ -105,6 +105,8 @@ def train_step(
     def loss_fn(
         params: jnp.ndarray, state_grid: jnp.ndarray, key: jnp.ndarray
     ) -> jnp.ndarray:
+        # Returns loss reduced over batch and spatial dimensions and loss not reduced over batch and spatial dimensions
+
         def body_fun(
             i: int, vals: Tuple[jnp.ndarray, jnp.ndarray]
         ) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -120,13 +122,13 @@ def train_step(
         alpha = jnp.clip(alpha, 0, 1)
         pred_rgb = pred_rgb * alpha
 
-        return jnp.mean(jnp.square(pred_rgb - target))
+        return jnp.mean(jnp.square(pred_rgb - target)), jnp.square(pred_rgb - target)
 
-    grad_fn = jax.value_and_grad(loss_fn)
-    loss, grad = grad_fn(state.params, state_grid, key)
+    grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
+    (loss, loss_no_reduce), grad = grad_fn(state.params, state_grid, key)
     state = state.apply_gradients(grads=grad)
 
-    return state, loss
+    return state, loss, loss_no_reduce
 
 
 def evaluate_step(
@@ -232,7 +234,7 @@ def train_and_evaluate(config: NCAConfig):
         # create a random number between 64 and 96
         nca_steps = jax.random.randint(key, shape=(), minval=100, maxval=120)
 
-        state, loss = train_step(
+        state, loss, loss_no_reduce = train_step(
             key, state, state_grid, train_target, cell_update_fn, nca_steps
         )
 

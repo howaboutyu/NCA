@@ -82,7 +82,12 @@ def test_train_step(config, dummy_state):
     state_grid = NHWC_to_NCWH(state_grid)
     target = NHWC_to_NCWH(target)
 
-    train_step(key, dummy_state, state_grid, target, cell_update_fn, num_steps=14)
+    state, loss, loss_no_reduce = train_step(
+        key, dummy_state, state_grid, target, cell_update_fn, num_steps=14
+    )
+
+    assert loss.shape == ()
+    assert loss_no_reduce.shape == (config.batch_size, 3, 32, 32)
 
 
 def test_eval_step(config, dummy_state):
