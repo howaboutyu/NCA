@@ -118,7 +118,8 @@ def train_step(
 
         # extract the predicted RGB values and alpha channel from the state grid
         pred_rgb = state_grid[:, :3]
-        alpha = state_grid[:, 3:4]
+        alpha = state_grid[:, 3:4] > 0.1
+
         # clip the alpha channel values to be between 0 and 1
         pred_rgb = alpha * pred_rgb
 
@@ -175,9 +176,8 @@ def evaluate_step(
             state_grid_sequence.append(state_grid)
 
         # extract the predicted RGB values and alpha channel from the state grid
-        state_grid = jnp.clip(state_grid, 0.0, 1.0)
         pred_rgb = state_grid[:, :3]
-        alpha = state_grid[:, 3:4]
+        alpha = state_grid[:, 3:4] > 0.1
 
         # clip the alpha channel values to be between 0 and 1
         pred_rgb = alpha * pred_rgb
