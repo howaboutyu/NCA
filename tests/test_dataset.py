@@ -36,6 +36,9 @@ def test_update_pool(generator):
 
     assert np.array_equal(generator.pool[indices], new_states)
 
+    loss_array = np.random.rand(4, 10, 10, 10)
+    generator.update_pool(indices, new_states, loss_array=loss_array)
+
 
 def test_get_target(generator):
     target = generator.get_target("emoji_imgs/skier.png")

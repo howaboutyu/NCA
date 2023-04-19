@@ -26,7 +26,7 @@ def config():
     return NCAConfig(
         dimensions=(32, 32),
         model_output_len=16,
-        batch_size=1,
+        batch_size=2,
         num_steps=2,
         eval_every=1,
         checkpoint_dir="/tmp/test_ckpt",
@@ -82,7 +82,7 @@ def test_train_step(config, dummy_state):
     state_grid = NHWC_to_NCWH(state_grid)
     target = NHWC_to_NCWH(target)
 
-    state, loss, loss_no_reduce = train_step(
+    state, loss, loss_no_reduce, _, _ = train_step(
         key, dummy_state, state_grid, target, cell_update_fn, num_steps=14
     )
 
