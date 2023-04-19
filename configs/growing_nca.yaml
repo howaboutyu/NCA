@@ -1,4 +1,7 @@
 # This is for replicating https://distill.pub/2020/growing-ca/
 
+checkpoint_dir: 'nca_exp1'
+pool_size: 100
+learning_rate: 1e-4
 
 
