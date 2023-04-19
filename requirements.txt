@@ -1,0 +1,8 @@
+flax
+optax
+black
+moviepy
+tensorboardX
+pytest
+opencv-python
+tensorflow

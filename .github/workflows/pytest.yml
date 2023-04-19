@@ -1,0 +1,23 @@
+name: pytest
+
+on: [push, pull_request]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+      - name: Install dependencies
+        run: |
+          sudo apt install libgl1
+          python -m pip install --upgrade pip
+          pip install jax
+          pip install -r requirements.txt
+      - name: Run tests with pytest
+        run: |
+          pytest
