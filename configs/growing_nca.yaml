@@ -1,6 +1,6 @@
 # This is for replicating https://distill.pub/2020/growing-ca/
 
-checkpoint_dir: 'nca_exp1'
+checkpoint_dir: 'ckpts/nca_exp1'
 pool_size: 100
 
 

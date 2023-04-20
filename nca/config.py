@@ -8,15 +8,15 @@ class NCAConfig:
     model_output_len: int = 16
     batch_size: int = 16
     num_steps: int = 100000
-    eval_every: int = 30
-    learning_rate: float = 1e-4
+    eval_every: int = 50
+    learning_rate: float = 1e-3
     pool_size: int = 1000
-    target_filename: str = "emoji_imgs/smile.png"
+    target_filename: str = "emoji_imgs/skier.png"
     checkpoint_dir: str = "checkpoints"
-    checkpoint_every: int = 30
+    checkpoint_every: int = 50
     validation_video_dir: str = "validation_videos"
     log_dir: str = "logs"
-    log_every: int = 10
+    log_every: int = 50
 
 
 def load_config(config_file: str) -> NCAConfig:
