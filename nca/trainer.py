@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+
 from flax.training import checkpoints, train_state
 import optax  # type: ignore
 from dataclasses import dataclass
@@ -118,8 +119,8 @@ def train_step(
 
         # extract the predicted RGB values and alpha channel from the state grid
         pred_rgb = state_grid[:, :3]
-        alpha = state_grid[:, 3:4] > 0.1
-
+        alpha = state_grid[:, 3:4]
+        alpha = jnp.clip(alpha, 0.0, 1.0)
         # clip the alpha channel values to be between 0 and 1
         pred_rgb = alpha * pred_rgb
 
@@ -138,6 +139,9 @@ def train_step(
         loss,
         (loss_no_reduce, final_state_grid, state_grid_sequence),
     ), grad = grad_fn(state.params, state_grid, key)
+
+    # grad = jax.tree_map(lambda g: g / jnp.linalg.norm(g) + 1e-8, grad)
+
     if apply_grad:
         state = state.apply_gradients(grads=grad)
 
@@ -245,16 +249,17 @@ def train_and_evaluate(config: NCAConfig):
         # split the random key into two subkeys
 
         # create a random number between 64 and 96
-        nca_steps = jax.random.randint(key, shape=(), minval=64, maxval=96)
+        # TODO: add to configs
+        nca_steps = 64  # jax.random.randint(key, shape=(), minval=240, maxval=360)
 
-        # This call of train_step will not optimize the model, it gets the loss for this batch
-        # will use the loss_no_reduce [batch_size, ...] to determine which final_state_grid to replace
-        # in the training batch
+        # This call of train_step will not optimize the model (`apply_grad`=False), it gets the loss for this batch
+        # and will use the loss_no_reduce with size:[batch_size, ...] to determine which element in the batch to replace
+
         (
             _,
             _,
             loss_no_reduce,
-            final_state_grid,
+            _,
             _,
         ) = train_step(
             key,
@@ -266,16 +271,11 @@ def train_and_evaluate(config: NCAConfig):
             apply_grad=False,
         )
 
-        # Update the pool with the seed
-        dataset_generator.update_pool(
-            state_grid_indices, final_state_grid, loss_no_reduce
-        )
-
-        # train it, with at least one seed state
-        state_grids, state_grid_indices = dataset_generator.sample(data_key)
-
-        # create a random number of steps for nca
-        nca_steps = jax.random.randint(key, shape=(), minval=64, maxval=96)
+        # get the batch_id with the maximum loss
+        loss_reduced = jnp.mean(loss_no_reduce, axis=(1, 2, 3))
+        batch_id_worst = jnp.argmax(loss_reduced)
+        print(f"Worst batch id : {batch_id_worst}")
+        state_grids[batch_id_worst] = dataset_generator.seed_state
 
         (
             state,
@@ -283,14 +283,24 @@ def train_and_evaluate(config: NCAConfig):
             _,
             final_training_grid,
             training_grid_array,
-        ) = train_step(key, state, state_grids, train_target, cell_update_fn, nca_steps)
+        ) = train_step(
+            key,
+            state,
+            state_grids,
+            train_target,
+            cell_update_fn,
+            nca_steps,
+            apply_grad=True,
+        )
 
+        # dataset_generator.update_pool(state_grid_indices, final_training_grid)
+        print(f"state_grid_indices: {state_grid_indices}")
         print(f"Step : {step}, loss : {loss}")
 
         if step % config.log_every == 0:
             training_grid_array = np.clip(training_grid_array, 0.0, 1.0)
 
-            alpha = training_grid_array[:, :, 3:4]
+            alpha = training_grid_array[:, :, 3:4] > 0.1
             training_grid_array = alpha * training_grid_array[:, :, :3]
 
             # training_grid_array has shape (T, N, C, H, W) but add_video needs (N, T, C, H, W)
@@ -314,11 +324,12 @@ def train_and_evaluate(config: NCAConfig):
 
             tb_writer.add_scalar("val_loss", np.asarray(loss), state.step)
             tb_writer.add_scalar("val_ssim", np.asarray(ssim), state.step)
+            tb_writer.add_image("target_img", np.asarray(train_target[0]), state.step)
 
             tb_state_grids = np.array(val_state_grids)
             tb_state_grids = np.clip(tb_state_grids, 0.0, 1.0)
             tb_state_grids = np.squeeze(tb_state_grids)
-            alpha = tb_state_grids[:, 3:4]
+            alpha = tb_state_grids[:, 3:4] > 0.1
             tb_state_grids = alpha * tb_state_grids[:, :3]
             tb_state_grids = tb_state_grids[np.newaxis, ...]
 
