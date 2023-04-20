@@ -35,27 +35,23 @@ class NCADataGenerator:
 
         return self.pool[indices], indices
 
-    def update_pool(
-        self,
-        indices: Any,
-        new_states: np.ndarray,
-        loss_array: Union[jnp.ndarray, None] = None,
-    ):
+    def update_pool(self, indices: Any, new_states: np.ndarray):
         self.pool[indices] = new_states
-
-        if loss_array is not None:
-            # get loss for each batch
-            loss_array = np.mean(loss_array, axis=(1, 2, 3))
-            highest_loss_batch_id = np.argmax(loss_array)
-            self.pool[indices] = new_states
-            self.pool[indices[highest_loss_batch_id]] = self.seed_state
 
     def get_target(self, filename: str) -> np.ndarray:
         img = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
         assert img.shape[2] == 4, "Image must have 4 channels"
         alpha = img[..., -1] > 0
         img = img[..., :3] * alpha[..., np.newaxis]
+        # img = cv2.resize(img, self.dimensions)
+
+        # # padd the resized image
+        pad_width = ((50, 50), (50, 50), (0, 0))
+        img = np.pad(img, pad_width, mode="constant", constant_values=0)
+
+        # resize again to target 😂
         img = cv2.resize(img, self.dimensions)
+
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = img / 255.0
 
