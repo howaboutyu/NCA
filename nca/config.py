@@ -9,9 +9,9 @@ class NCAConfig:
     batch_size: int = 16
     num_steps: int = 100000
     eval_every: int = 50
-    learning_rate: float = 1e-3
+    learning_rate: float = 1e-5
     pool_size: int = 1000
-    target_filename: str = "emoji_imgs/skier.png"
+    target_filename: str = "emoji_imgs/smile.png"
     checkpoint_dir: str = "checkpoints"
     checkpoint_every: int = 50
     validation_video_dir: str = "validation_videos"

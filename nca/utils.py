@@ -51,7 +51,7 @@ def state_grid_to_rgb(state_grid: jnp.ndarray) -> jnp.ndarray:
     alpha = state_grid[:, 3:4]
     alpha = jnp.clip(alpha, 0.0, 1.0)
     rgb = state_grid[:, :3]
-    rgb = rgb * alpha
+    rgb = 1 -  alpha + rgb
     return rgb
 
 
