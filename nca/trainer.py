@@ -246,7 +246,7 @@ def train_and_evaluate(config: NCAConfig):
 
         # create a random number between 64 and 96
         # TODO: add to configs
-        nca_steps = 64  # jax.random.randint(key, shape=(), minval=240, maxval=360)
+        nca_steps = jax.random.randint(key, shape=(), minval=64, maxval=96)
 
         # use mse to find the element in the batch with the highest loss
         loss_non_reduced = mse(state_grids[:, :3], train_target, reduce_mean=False)
@@ -299,7 +299,7 @@ def train_and_evaluate(config: NCAConfig):
             seed_grid = dataset_generator.seed_state[np.newaxis, ...]
 
             val_state_grids, loss, ssim = evaluate_step(
-                state, seed_grid, train_target[:1], cell_update_fn, num_steps=1200
+                state, seed_grid, train_target[:1], cell_update_fn, num_steps=800
             )
 
             tb_writer.add_scalar("val_loss", np.asarray(loss), state.step)
