@@ -17,7 +17,7 @@ from nca.model import UpdateModel
 from nca.nca import create_perception_kernel, perceive, cell_update
 from nca.config import NCAConfig
 from nca.dataset import NCADataGenerator
-from nca.utils import make_video, NCHW_to_NHWC
+from nca.utils import make_video, NCHW_to_NHWC, state_grid_to_rgb
 
 Array = Any
 
@@ -84,6 +84,15 @@ def create_cell_update_fn(
     return cell_update_fn
 
 
+def mse(pred_rgb: jnp.ndarray, target: jnp.ndarray, reduce_mean: bool = True):
+    if reduce_mean == True:
+        loss_value = jnp.mean(jnp.square(pred_rgb - target))
+    else:
+        loss_value = jnp.square(pred_rgb - target)
+
+    return loss_value
+
+
 def train_step(
     key: jax.random.PRNGKeyArray,
     state: train_state.TrainState,
@@ -118,17 +127,13 @@ def train_step(
             state_grid_sequence.append(state_grid)
 
         # extract the predicted RGB values and alpha channel from the state grid
-        pred_rgb = state_grid[:, :3]
-        alpha = state_grid[:, 3:4]
-        alpha = jnp.clip(alpha, 0.0, 1.0)
-        # clip the alpha channel values to be between 0 and 1
-        pred_rgb = alpha * pred_rgb
+        pred_rgb = state_grid_to_rgb(state_grid)
 
         # used for visualizing the state grid during training
         state_grid_sequence = jnp.asarray(state_grid_sequence)
 
-        return jnp.mean(jnp.square(pred_rgb - target)), (
-            jnp.square(pred_rgb - target),
+        return mse(pred_rgb, target), (
+            mse(pred_rgb, target, reduce_mean=False),
             state_grid,
             state_grid_sequence,
         )
@@ -139,8 +144,6 @@ def train_step(
         loss,
         (loss_no_reduce, final_state_grid, state_grid_sequence),
     ), grad = grad_fn(state.params, state_grid, key)
-
-    # grad = jax.tree_map(lambda g: g / jnp.linalg.norm(g) + 1e-8, grad)
 
     if apply_grad:
         state = state.apply_gradients(grads=grad)
@@ -179,12 +182,7 @@ def evaluate_step(
             state_grid = cell_update_fn(key, state_grid, params)
             state_grid_sequence.append(state_grid)
 
-        # extract the predicted RGB values and alpha channel from the state grid
-        pred_rgb = state_grid[:, :3]
-        alpha = state_grid[:, 3:4] > 0.1
-
-        # clip the alpha channel values to be between 0 and 1
-        pred_rgb = alpha * pred_rgb
+        pred_rgb = state_grid_to_rgb(state_grid)
 
         return pred_rgb, state_grid_sequence
 
@@ -201,13 +199,11 @@ def evaluate_step(
     tf_target = tf.cast(tf_target, tf.float32)
     ssim = tf.reduce_mean(tf.image.ssim(pred_rgb_tf, tf_target, max_val=1.0))
     # compute the loss between the predicted and target images using JAX
-    if reduce_loss:
-        loss = jnp.mean(jnp.square(pred_rgb - target))
-    else:
-        loss = jnp.square(pred_rgb - target)
+
+    loss_value = mse(pred_rgb, target, reduce_loss)
 
     # return the predicted RGB values, loss, and SSIM score as a tuple
-    return state_grids, loss, ssim
+    return state_grids, loss_value, ssim
 
 
 def train_and_evaluate(config: NCAConfig):
@@ -252,28 +248,12 @@ def train_and_evaluate(config: NCAConfig):
         # TODO: add to configs
         nca_steps = 64  # jax.random.randint(key, shape=(), minval=240, maxval=360)
 
-        # This call of train_step will not optimize the model (`apply_grad`=False), it gets the loss for this batch
-        # and will use the loss_no_reduce with size:[batch_size, ...] to determine which element in the batch to replace
-
-        (
-            _,
-            _,
-            loss_no_reduce,
-            _,
-            _,
-        ) = train_step(
-            key,
-            state,
-            state_grids,
-            train_target,
-            cell_update_fn,
-            nca_steps,
-            apply_grad=False,
-        )
+        # use mse to find the element in the batch with the highest loss
+        loss_non_reduced = mse(state_grids[:, :3], train_target, reduce_mean=False)
+        loss_per_batch = jnp.mean(loss_non_reduced, axis=(1, 2, 3))
 
         # get the batch_id with the maximum loss
-        loss_reduced = jnp.mean(loss_no_reduce, axis=(1, 2, 3))
-        batch_id_worst = jnp.argmax(loss_reduced)
+        batch_id_worst = jnp.argmax(loss_per_batch)
         print(f"Worst batch id : {batch_id_worst}")
         state_grids[batch_id_worst] = dataset_generator.seed_state
 
@@ -293,7 +273,7 @@ def train_and_evaluate(config: NCAConfig):
             apply_grad=True,
         )
 
-        # dataset_generator.update_pool(state_grid_indices, final_training_grid)
+        dataset_generator.update_pool(state_grid_indices, final_training_grid)
         print(f"state_grid_indices: {state_grid_indices}")
         print(f"Step : {step}, loss : {loss}")
 

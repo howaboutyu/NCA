@@ -46,6 +46,15 @@ def alpha_mask(x: jnp.ndarray) -> jnp.ndarray:
     return x[:, :, :, :3] * x[:, :, :, 3:4]
 
 
+def state_grid_to_rgb(state_grid: jnp.ndarray) -> jnp.ndarray:
+    # extract the predicted RGB values and alpha channel from the state grid
+    alpha = state_grid[:, 3:4]
+    alpha = jnp.clip(alpha, 0.0, 1.0)
+    rgb = state_grid[:, :3]
+    rgb = rgb * alpha
+    return rgb
+
+
 def make_gif(
     images: Union[List[Any], np.ndarray], filename: str, fps: int = 10
 ) -> None:
