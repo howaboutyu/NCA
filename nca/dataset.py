@@ -1,18 +1,21 @@
-from dataclasses import dataclass
-from typing import Tuple, List, Dict, Any, Callable
+from dataclasses import dataclass, field
+from typing import Tuple, List, Dict, Any, Callable, Union
 import numpy as np
 import jax
-import cv2
+import jax.numpy as jnp
+import cv2  # type: ignore
+
+Array = Any
 
 
 @dataclass
 class NCADataGenerator:
     pool_size: int
     batch_size: int
-    dimensions: Tuple[int, int]
+    dimensions: Tuple[Any, ...]
     model_output_len: int
-    seed_state: np.ndarray = None
-    pool: np.ndarray = None
+    seed_state: np.ndarray = field(init=False)
+    pool: np.ndarray = field(init=False)
 
     def __post_init__(self):
         self.seed_state = np.zeros(
@@ -24,7 +27,7 @@ class NCADataGenerator:
 
         self.pool = np.asarray([self.seed_state] * self.pool_size)
 
-    def sample(self, key: Any) -> Tuple[np.ndarray, jax.numpy.ndarray]:
+    def sample(self, key: Any) -> Tuple[np.ndarray, jax.Array]:
         # sample a batch of random indices from the pool
         indices = jax.random.randint(
             key, shape=(self.batch_size,), minval=0, maxval=self.pool_size
@@ -32,20 +35,36 @@ class NCADataGenerator:
 
         return self.pool[indices], indices
 
-    def update_pool(self, indices: np.ndarray, new_states: np.ndarray):
+    def update_pool(self, indices: Any, new_states: np.ndarray):
         self.pool[indices] = new_states
 
     def get_target(self, filename: str) -> np.ndarray:
+        # Load the image with alpha channel
         img = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
-        assert img.shape[2] == 4, "Image must have 4 channels"
-        alpha = img[..., -1] > 0
-        img = img[..., :3] * alpha[..., np.newaxis]
+
+        # Check if the image has 4 channels
+        if img is None or img.shape[2] != 4:
+            raise ValueError("Image must have 4 channels")
+
+        # Pad the image
+        pad_width = ((50, 50), (50, 50), (0, 0))
+        img = np.pad(img, pad_width, mode="constant", constant_values=0)
+
+        # Resize the image to the target dimensions
         img = cv2.resize(img, self.dimensions)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = img / 255.0
 
+        # Convert image to float32
+        img = img.astype(np.float32)
+
+        # Apply alpha channel to color channels and normalize the color channels
+        alpha = img[..., -1] > 0
+        alpha = alpha.astype(np.float32)
+        img[..., :3] = img[..., :3] * alpha[..., np.newaxis] / 255.0
+        img[..., -1] = alpha
+        img[..., [0, 1, 2]] = img[..., [2, 1, 0]]
+
+        # Duplicate the image for batch size and transpose the axes
         target = np.asarray([img] * self.batch_size)
-
         target = np.transpose(target, (0, 3, 1, 2))
 
         return target

@@ -1,9 +1,9 @@
 import jax.numpy as jnp
 import numpy as np
-from moviepy.editor import ImageSequenceClip
+from moviepy.editor import ImageSequenceClip  # type: ignore
 import tempfile
 from glob import glob
-import cv2
+import cv2  # type: ignore
 
 from typing import List, Any, Union
 
@@ -44,6 +44,15 @@ def alpha_mask(x: jnp.ndarray) -> jnp.ndarray:
     # clip to [0, 1]
     x = jnp.clip(x, 0, 1)
     return x[:, :, :, :3] * x[:, :, :, 3:4]
+
+
+def state_grid_to_rgb(state_grid: jnp.ndarray) -> jnp.ndarray:
+    # extract the predicted RGB values and alpha channel from the state grid
+    state_grid = jnp.clip(state_grid, 0.0, 1.0)
+    alpha = state_grid[:, 3:4]
+    rgb = state_grid[:, :3]
+    rgb = rgb * alpha
+    return rgb
 
 
 def make_gif(
