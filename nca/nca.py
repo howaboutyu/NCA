@@ -83,34 +83,49 @@ def cell_update(
     kernel_y: jax.Array,
     update_prob: float = 0.5,
 ) -> jnp.ndarray:
-    get_alive_state = lambda x: x[:, 3, :, :]
+    """
+    Cell update function to perform the update on the given state grid.
 
-    pre_alive_mask = alive_masking(get_alive_state(state_grid))
+    Args:
+        key: A JAX array representing the random key.
+        state_grid: A JAX array representing the input state grid.
+        model_fn: The model function to be applied to the perceived grid.
+        params: A JAX array representing the model parameters.
+        kernel_x: A JAX array representing the Sobel operator for
+            edge detection in the x direction.
+        kernel_y: A JAX array representing the Sobel operator for
+            edge detection in the y direction.
+        update_prob: The probability of cell update. Default is 0.5.
+
+    Returns:
+        A JAX array representing the updated state grid.
+    """
+    pre_alive_mask = alive_masking(state_grid[:, 3, :, :])
 
     perceived_grid = perceive(state_grid, kernel_x, kernel_y)
-    # perceived_grid = jax.lax.stop_gradient(perceived_grid)
 
-    # NCHW -> NHWC
+    # Transpose: NCHW -> NHWC
     perceived_grid = jnp.transpose(perceived_grid, (0, 2, 3, 1))
 
-    ds = model_fn.apply(params, perceived_grid)  # -> NHWC
+    ds = model_fn.apply(params, perceived_grid)
 
     # Stochastic update
     rand_mask = jax.random.uniform(key, shape=ds.shape[:-1]) < update_prob
-    ds = ds * rand_mask[..., jnp.newaxis]  # -> NHWC
+    ds = ds * rand_mask[..., jnp.newaxis]
 
-    # HWCN -> NCHW
+    # Transpose: NHWC -> NCHW
     ds = jnp.transpose(ds, (0, 3, 1, 2))
 
     state_grid = state_grid + ds
 
-    post_alive_mask = alive_masking(get_alive_state(state_grid))
+    post_alive_mask = alive_masking(state_grid[:, 3, :, :])
     alive_mask = pre_alive_mask * post_alive_mask
     alive_mask = jnp.expand_dims(alive_mask, 1)
 
     state_grid = alive_mask.astype(jnp.float32) * state_grid
 
     return state_grid
+
 
 
 def alive_masking(
