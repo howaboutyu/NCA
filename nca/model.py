@@ -8,7 +8,7 @@ class UpdateModel(nn.Module):
     def setup(self):
         """Initialize the model layers."""
         self.dense1 = nn.Dense(128)
-        # self.dense2 = nn.Dense(128)
+        self.dense2 = nn.Dense(128)
 
         self.dense_final = nn.Dense(
             self.model_output_len, kernel_init=nn.initializers.zeros
@@ -25,7 +25,7 @@ class UpdateModel(nn.Module):
         """
         x = self.dense1(perception_vector)
         x = nn.relu(x)
-        # x = self.dense2(x)
-        # x = nn.relu(x)
+        x = self.dense2(x)
+        x = nn.relu(x)
         ds = self.dense_final(x)
         return ds
