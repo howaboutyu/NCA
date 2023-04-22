@@ -127,7 +127,6 @@ def cell_update(
     return state_grid
 
 
-
 def alive_masking(
     alive_state: jnp.ndarray,
     alive_threshold: float = 0.1,

@@ -48,10 +48,10 @@ def alpha_mask(x: jnp.ndarray) -> jnp.ndarray:
 
 def state_grid_to_rgb(state_grid: jnp.ndarray) -> jnp.ndarray:
     # extract the predicted RGB values and alpha channel from the state grid
+    state_grid = jnp.clip(state_grid, 0.0, 1.0)
     alpha = state_grid[:, 3:4]
-    alpha = jnp.clip(alpha, 0.0, 1.0)
     rgb = state_grid[:, :3]
-    rgb = 1 -  alpha + rgb
+    rgb = rgb * alpha
     return rgb
 
 
