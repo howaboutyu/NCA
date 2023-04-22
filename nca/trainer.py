@@ -11,7 +11,7 @@ import tensorflow as tf  # type: ignore
 from tqdm import tqdm  # type: ignore
 import os
 from tensorboardX import SummaryWriter  # type: ignore
-
+from functools import partial
 
 from nca.model import UpdateModel
 from nca.nca import create_perception_kernel, perceive, cell_update
@@ -127,13 +127,12 @@ def train_step(
             state_grid_sequence.append(state_grid)
 
         # extract the predicted RGB values and alpha channel from the state grid
-        pred_rgb = state_grid_to_rgb(state_grid)
+        pred_rgba = state_grid[:, :4]
 
         # used for visualizing the state grid during training
         state_grid_sequence = jnp.asarray(state_grid_sequence)
 
-        return mse(pred_rgb, target), (
-            mse(pred_rgb, target, reduce_mean=False),
+        return mse(pred_rgba, target), (
             state_grid,
             state_grid_sequence,
         )
@@ -142,13 +141,13 @@ def train_step(
 
     (
         loss,
-        (loss_no_reduce, final_state_grid, state_grid_sequence),
+        (final_state_grid, state_grid_sequence),
     ), grad = grad_fn(state.params, state_grid, key)
 
     if apply_grad:
         state = state.apply_gradients(grads=grad)
 
-    return state, loss, loss_no_reduce, final_state_grid, state_grid_sequence
+    return state, loss, final_state_grid, state_grid_sequence
 
 
 def evaluate_step(
@@ -170,7 +169,6 @@ def evaluate_step(
     Returns:
         state_grids: A list of the cell state grids after each step. NCWH format.
         loss: The loss value for this step.
-        SSIM: The SSIM value for this step.
     """
 
     # define a function that takes the model parameters and cell state grid as inputs and returns the predicted RGB values
@@ -182,28 +180,17 @@ def evaluate_step(
             state_grid = cell_update_fn(key, state_grid, params)
             state_grid_sequence.append(state_grid)
 
-        pred_rgb = state_grid_to_rgb(state_grid)
+        pred_rgba = state_grid[:, :4]
 
-        return pred_rgb, state_grid_sequence
+        return pred_rgba, state_grid_sequence
 
     # call the predict_fn with the current state parameters and cell state grid to get the predicted RGB values
-    pred_rgb, state_grids = predict_fn(state.params, state_grid)
-    # convert the predicted RGB values and target to TensorFlow tensors
-    pred_rgb_tf = tf.convert_to_tensor(pred_rgb)
-    pred_rgb_tf = tf.transpose(pred_rgb_tf, perm=[0, 2, 3, 1])
-    tf_target = tf.convert_to_tensor(target)
-    tf_target = tf.transpose(tf_target, perm=[0, 2, 3, 1])
+    pred_rgba, state_grids = predict_fn(state.params, state_grid)
 
-    # compute the SSIM score between the predicted and target images using TensorFlow
-    pred_rgb_tf = tf.cast(pred_rgb_tf, tf.float32)
-    tf_target = tf.cast(tf_target, tf.float32)
-    ssim = tf.reduce_mean(tf.image.ssim(pred_rgb_tf, tf_target, max_val=1.0))
-    # compute the loss between the predicted and target images using JAX
+    loss_value = mse(pred_rgba, target, reduce_loss)
 
-    loss_value = mse(pred_rgb, target, reduce_loss)
-
-    # return the predicted RGB values, loss, and SSIM score as a tuple
-    return state_grids, loss_value, ssim
+    # return the predicted RGB values, loss as a tuple
+    return state_grids, loss_value
 
 
 def train_and_evaluate(config: NCAConfig):
@@ -237,6 +224,12 @@ def train_and_evaluate(config: NCAConfig):
 
     tb_writer = SummaryWriter(config.log_dir)
 
+    p_train_step = partial(
+        train_step, cell_update_fn=cell_update_fn, num_steps=64, apply_grad=True
+    )
+
+    train_step_jit = jax.jit(p_train_step)
+
     for step in range(state.step, config.num_steps):
         # get the training data
         state_grids, state_grid_indices = dataset_generator.sample(data_key)
@@ -248,7 +241,7 @@ def train_and_evaluate(config: NCAConfig):
         nca_steps = jax.random.randint(key, shape=(), minval=64, maxval=96)
 
         # use mse to find the element in the batch with the highest loss
-        loss_non_reduced = mse(state_grids[:, :3], train_target, reduce_mean=False)
+        loss_non_reduced = mse(state_grids[:, :4], train_target, reduce_mean=False)
         loss_per_batch = jnp.mean(loss_non_reduced, axis=(1, 2, 3))
 
         # get the batch_id with the maximum loss
@@ -259,17 +252,16 @@ def train_and_evaluate(config: NCAConfig):
         (
             state,
             loss,
-            _,
             final_training_grid,
             training_grid_array,
-        ) = train_step(
+        ) = train_step_jit(
             key,
             state,
             state_grids,
             train_target,
-            cell_update_fn,
-            nca_steps,
-            apply_grad=True,
+            # cell_update_fn,
+            # nca_steps,
+            # apply_grad=True,
         )
 
         dataset_generator.update_pool(state_grid_indices, final_training_grid)
@@ -297,12 +289,11 @@ def train_and_evaluate(config: NCAConfig):
             # get the seed
             seed_grid = dataset_generator.seed_state[np.newaxis, ...]
 
-            val_state_grids, loss, ssim = evaluate_step(
+            val_state_grids, loss = evaluate_step(
                 state, seed_grid, train_target[:1], cell_update_fn, num_steps=800
             )
 
             tb_writer.add_scalar("val_loss", np.asarray(loss), state.step)
-            tb_writer.add_scalar("val_ssim", np.asarray(ssim), state.step)
             tb_writer.add_image("target_img", np.asarray(train_target[0]), state.step)
 
             tb_state_grids = np.array(val_state_grids)
