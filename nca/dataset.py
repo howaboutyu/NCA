@@ -39,24 +39,32 @@ class NCADataGenerator:
         self.pool[indices] = new_states
 
     def get_target(self, filename: str) -> np.ndarray:
+        # Load the image with alpha channel
         img = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
-        assert img.shape[2] == 4, "Image must have 4 channels"
-        alpha = img[..., -1] > 0
-        img = img[..., :3] * alpha[..., np.newaxis]
-        # img = cv2.resize(img, self.dimensions)
 
-        # # padd the resized image
+        # Check if the image has 4 channels
+        if img is None or img.shape[2] != 4:
+            raise ValueError("Image must have 4 channels")
+
+        # Pad the image
         pad_width = ((50, 50), (50, 50), (0, 0))
         img = np.pad(img, pad_width, mode="constant", constant_values=0)
 
-        # resize again to target 😂
+        # Resize the image to the target dimensions
         img = cv2.resize(img, self.dimensions)
 
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = img / 255.0
+        # Convert image to float32
+        img = img.astype(np.float32)
 
+        # Apply alpha channel to color channels and normalize the color channels
+        alpha = img[..., -1] > 0
+        alpha = alpha.astype(np.float32)
+        img[..., :3] = img[..., :3] * alpha[..., np.newaxis] / 255.0
+        img[..., -1] = alpha
+        img[..., [0, 1, 2]] = img[..., [2, 1, 0]]
+
+        # Duplicate the image for batch size and transpose the axes
         target = np.asarray([img] * self.batch_size)
-
         target = np.transpose(target, (0, 3, 1, 2))
 
         return target
