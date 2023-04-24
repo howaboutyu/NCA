@@ -19,7 +19,7 @@ from nca.trainer import (
     evaluate,
 )
 from nca.config import NCAConfig
-from nca.utils import NCHW_to_NHWC, NHWC_to_NCWH
+from nca.utils import NCHW_to_NHWC, NHWC_to_NCHW
 
 
 @pytest.fixture
