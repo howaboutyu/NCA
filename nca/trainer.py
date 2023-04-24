@@ -17,38 +17,37 @@ from nca.model import UpdateModel
 from nca.nca import create_perception_kernel, perceive, cell_update
 from nca.config import NCAConfig
 from nca.dataset import NCADataGenerator
-from nca.utils import make_video, NCHW_to_NHWC, state_grid_to_rgb
+from nca.utils import make_video, NCHW_to_NHWC, state_grid_to_rgb, mse
 
 Array = Any
 
 
-def create_state(config: NCAConfig) -> train_state.TrainState:
+def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
+    # Create a cosine learning rate decay schedule
     learning_rate_schedule = optax.cosine_decay_schedule(
         init_value=config.learning_rate, decay_steps=config.num_steps
     )
 
-    tx = optax.adam(learning_rate=learning_rate_schedule)
+    # Create an Adam optimizer with the learning rate schedule
+    optimizer = optax.adam(learning_rate=learning_rate_schedule)
 
+    # Initialize the model with random weights
     model = UpdateModel(model_output_len=config.model_output_len)
+    initial_params = jax.random.normal(
+        jax.random.PRNGKey(0),
+        (1, config.dimensions[0], config.dimensions[1], config.model_output_len * 3),
+    )
+    initial_state = model.init(jax.random.PRNGKey(0), initial_params)
 
-    state = train_state.TrainState.create(
+    # Create a TrainState object to hold the model state and optimizer state
+    train_state = train_state.TrainState.create(
         apply_fn=model,
-        params=model.init(
-            jax.random.PRNGKey(0),
-            jax.random.normal(
-                jax.random.PRNGKey(0),
-                (
-                    1,
-                    config.dimensions[0],
-                    config.dimensions[1],
-                    config.model_output_len * 3,
-                ),
-            ),
-        ),
-        tx=tx,
+        params=initial_state,
+        tx=optimizer,
     )
 
-    return state, learning_rate_schedule
+    # Return the TrainState object and the learning rate schedule
+    return train_state, learning_rate_schedule
 
 
 def create_cell_update_fn(
@@ -84,24 +83,15 @@ def create_cell_update_fn(
     return cell_update_fn
 
 
-def mse(pred_rgb: jnp.ndarray, target: jnp.ndarray, reduce_mean: bool = True):
-    if reduce_mean == True:
-        loss_value = jnp.mean(jnp.square(pred_rgb - target))
-    else:
-        loss_value = jnp.square(pred_rgb - target)
-
-    return loss_value
-
-
 def train_step(
     key: jax.random.PRNGKeyArray,
     state: train_state.TrainState,
-    state_grid: np.ndarray,
-    target: np.ndarray,
+    state_grid: Array,
+    target: Array,
     cell_update_fn: Callable,
     num_steps: Array = 64,
     apply_grad: bool = True,
-) -> Tuple[train_state.TrainState, Array, Array, Array, Array]:
+) -> Tuple[train_state.TrainState, Array, Array, Array]:
     """Runs a single training step.
 
     Args:
@@ -116,12 +106,12 @@ def train_step(
     """
 
     def loss_fn(
-        params: jnp.ndarray, state_grid: jnp.ndarray, key: jnp.ndarray
-    ) -> Tuple[Array, Tuple[Array, Array, Array]]:
+        params: jnp.ndarray, state_grid: jnp.ndarray, key: jax.random.PRNGKeyArray
+    ) -> Tuple[Array, Tuple[Array, Array]]:
         # Returns loss reduced over batch and spatial dimensions and loss not reduced over batch and spatial dimensions
 
         state_grid_sequence = []
-        for i in range(num_steps):
+        for _ in range(num_steps):
             _, key = jax.random.split(key)
             state_grid = cell_update_fn(key, state_grid, params)
             state_grid_sequence.append(state_grid)
@@ -130,11 +120,11 @@ def train_step(
         pred_rgba = state_grid[:, :4]
 
         # used for visualizing the state grid during training
-        state_grid_sequence = jnp.asarray(state_grid_sequence)
+        jnp_state_grid_sequence = jnp.asarray(state_grid_sequence)
 
         return mse(pred_rgba, target), (
             state_grid,
-            state_grid_sequence,
+            jnp_state_grid_sequence,
         )
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
@@ -234,12 +224,6 @@ def train_and_evaluate(config: NCAConfig):
         # get the training data
         state_grids, state_grid_indices = dataset_generator.sample(data_key)
 
-        # split the random key into two subkeys
-
-        # create a random number between 64 and 96
-        # TODO: add to configs
-        nca_steps = jax.random.randint(key, shape=(), minval=64, maxval=96)
-
         # use mse to find the element in the batch with the highest loss
         loss_non_reduced = mse(state_grids[:, :4], train_target, reduce_mean=False)
         loss_per_batch = jnp.mean(loss_non_reduced, axis=(1, 2, 3))
@@ -259,9 +243,6 @@ def train_and_evaluate(config: NCAConfig):
             state,
             state_grids,
             train_target,
-            # cell_update_fn,
-            # nca_steps,
-            # apply_grad=True,
         )
 
         dataset_generator.update_pool(state_grid_indices, final_training_grid)
