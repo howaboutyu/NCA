@@ -147,7 +147,7 @@ def evaluate_step(
     cell_update_fn: Callable,
     num_steps: int = 64,
     reduce_loss: bool = True,
-) -> Tuple[List[Array], float, float]:
+) -> Tuple[List[Array], Array]:
     """Runs a single evaluation step.
 
     Args:

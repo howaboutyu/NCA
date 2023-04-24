@@ -101,3 +101,14 @@ def make_video(
 
         clip = ImageSequenceClip(glob(f"{tempdir}/*.png"), fps=fps)
         clip.write_videofile(filename, fps=fps)
+
+
+def mse(
+    pred_rgb: jnp.ndarray, target: jnp.ndarray, reduce_mean: bool = True
+) -> jnp.ndarray:
+    if reduce_mean == True:
+        loss_value = jnp.mean(jnp.square(pred_rgb - target))
+    else:
+        loss_value = jnp.square(pred_rgb - target)
+
+    return loss_value

@@ -27,7 +27,7 @@ class NCADataGenerator:
 
         self.pool = np.asarray([self.seed_state] * self.pool_size)
 
-    def sample(self, key: Any) -> Tuple[np.ndarray, jax.Array]:
+    def sample(self, key: Any) -> Tuple[jax.Array, jax.Array]:
         # sample a batch of random indices from the pool
         indices = jax.random.randint(
             key, shape=(self.batch_size,), minval=0, maxval=self.pool_size
@@ -38,7 +38,7 @@ class NCADataGenerator:
     def update_pool(self, indices: Any, new_states: np.ndarray):
         self.pool[indices] = new_states
 
-    def get_target(self, filename: str) -> np.ndarray:
+    def get_target(self, filename: str) -> jax.Array:
         # Load the image with alpha channel
         img = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
 
