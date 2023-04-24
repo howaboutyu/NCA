@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Tuple, List, Dict, Any, Callable, Union
+from typing import Tuple, Any
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -67,4 +67,4 @@ class NCADataGenerator:
         target = np.asarray([img] * self.batch_size)
         target = np.transpose(target, (0, 3, 1, 2))
 
-        return target
+        return jnp.asarray(target)

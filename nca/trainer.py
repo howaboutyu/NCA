@@ -40,14 +40,14 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
     initial_state = model.init(jax.random.PRNGKey(0), initial_params)
 
     # Create a TrainState object to hold the model state and optimizer state
-    train_state = train_state.TrainState.create(
+    state = train_state.TrainState.create(
         apply_fn=model,
         params=initial_state,
         tx=optimizer,
     )
 
     # Return the TrainState object and the learning rate schedule
-    return train_state, learning_rate_schedule
+    return state, learning_rate_schedule
 
 
 def create_cell_update_fn(
