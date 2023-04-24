@@ -7,8 +7,8 @@ class UpdateModel(nn.Module):
 
     def setup(self):
         """Initialize the model layers."""
-        self.dense1 = nn.Dense(128)
-        self.dense2 = nn.Dense(128)
+        self.dense1 = nn.Dense(128, kernel_init=nn.initializers.lecun_normal)
+        self.dense2 = nn.Dense(128, kernel_init=nn.initializers.lecun_normal)
 
         self.dense_final = nn.Dense(
             self.model_output_len, kernel_init=nn.initializers.zeros
