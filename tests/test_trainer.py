@@ -52,7 +52,7 @@ def test_create_state(config):
 def test_cell_update_fn(config):
     key = jax.random.PRNGKey(0)
     state_grid = jnp.zeros((1,) + config.dimensions + (config.model_output_len,))
-    state_grid = NHWC_to_NCWH(state_grid)
+    state_grid = NHWC_to_NCHW(state_grid)
     model = UpdateModel(model_output_len=config.model_output_len)
 
     cell_update_fn = create_cell_update_fn(config, model)
@@ -80,8 +80,8 @@ def test_train_step(config, dummy_state):
 
     cell_update_fn = create_cell_update_fn(config, dummy_state.apply_fn)
 
-    state_grid = NHWC_to_NCWH(state_grid)
-    target = NHWC_to_NCWH(target)
+    state_grid = NHWC_to_NCHW(state_grid)
+    target = NHWC_to_NCHW(target)
 
     state, loss, _, _ = train_step(
         key, dummy_state, state_grid, target, cell_update_fn, num_steps=14
@@ -98,8 +98,8 @@ def test_eval_step(config, dummy_state):
 
     cell_update_fn = create_cell_update_fn(config, dummy_state.apply_fn)
 
-    state_grid = NHWC_to_NCWH(state_grid)
-    target = NHWC_to_NCWH(target)
+    state_grid = NHWC_to_NCHW(state_grid)
+    target = NHWC_to_NCHW(target)
 
     state_grids, loss = evaluate_step(
         dummy_state, state_grid, target, cell_update_fn, num_steps=11
