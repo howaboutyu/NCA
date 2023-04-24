@@ -6,3 +6,4 @@ tensorboardX
 pytest
 opencv-python
 tensorflow
+tensorflow_addons
