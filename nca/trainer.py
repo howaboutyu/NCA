@@ -314,3 +314,47 @@ def train_and_evaluate(config: NCAConfig):
 
         key, _ = jax.random.split(key)
         data_key, _ = jax.random.split(data_key)
+
+
+def evaluate(config: NCAConfig):
+    state, _ = create_state(config)
+
+    if config.checkpoint_dir:
+        state = checkpoints.restore_checkpoint(config.checkpoint_dir, state)
+
+    cell_update_fn = create_cell_update_fn(config, state.apply_fn)
+
+    dataset_generator = NCADataGenerator(
+        pool_size=config.pool_size,
+        batch_size=config.batch_size,
+        dimensions=config.dimensions,
+        model_output_len=config.model_output_len,
+    )
+
+    nca_looper_fn = partial(
+        nca_looper, cell_update_fn=cell_update_fn, num_steps=config.num_steps
+    )
+
+    num_loops = int(config.total_eval_steps // config.num_steps)
+
+    state_grid = dataset_generator.seed_state[np.newaxis, ...]
+    state_grid_cache = []
+
+    key = jax.random.PRNGKey(0)
+    for n in range(num_loops):
+        _, state_grid_array = nca_looper_fn(key, state.params, state_grid)
+        state_grid_cache.append(state_grid_array)
+        state_grid = state_grid_array[-1]
+
+    state_grid_cache = jnp.concatenate(state_grid_cache, axis=0)
+    state_grid_cache = jnp.squeeze(state_grid_cache)
+    rgba = state_grid_cache[:, :4]
+    rgb = rgba[:, :3] * rgba[:, 3:4]
+
+    # NCHW -> NHWC
+    rgb = jnp.transpose(rgb, (0, 2, 3, 1))
+
+    # resize with tf
+    rgb = tf.image.resize(rgb, (256, 256)).numpy()
+
+    make_video(rgb, config.evaluation_video_file)

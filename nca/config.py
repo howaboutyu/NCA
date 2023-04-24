@@ -18,6 +18,10 @@ class NCAConfig:
     log_dir: str = "logs"
     log_every: int = 500
 
+    # evaluation parameters
+    total_eval_steps: int = 300
+    evaluation_video_file: str = "/tmp/evaluation_video.mp4"
+
 
 def load_config(config_file: str) -> NCAConfig:
     with open(config_file, "r") as f:

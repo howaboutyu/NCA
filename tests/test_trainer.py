@@ -16,6 +16,7 @@ from nca.trainer import (
     create_cell_update_fn,
     evaluate_step,
     train_and_evaluate,
+    evaluate,
 )
 from nca.config import NCAConfig
 from nca.utils import NCHW_to_NHWC, NHWC_to_NCWH
@@ -124,4 +125,12 @@ def test_train_and_evaluate(config):
 
     # rm testing dirs
     os.system(f"rm -rf {config.checkpoint_dir}")
+    os.system(f"rm -rf {config.validation_video_dir}")
+
+
+def test_evaluation(config):
+    evaluate(config)
+
+    os.path.exists(config.validation_video_dir)
+
     os.system(f"rm -rf {config.validation_video_dir}")
