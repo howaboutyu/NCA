@@ -4,6 +4,10 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 import cv2  # type: ignore
+import tensorflow as tf  # type: ignore
+import tensorflow_addons as tfa  # type: ignore
+
+from nca.utils import NCHW_to_NHWC, NHWC_to_NCHW
 
 Array = Any
 
@@ -68,3 +72,25 @@ class NCADataGenerator:
         target = np.transpose(target, (0, 3, 1, 2))
 
         return jnp.asarray(target)
+
+    @staticmethod
+    def random_cutout(img_nchw, min_size=(4, 4), max_size=(32, 32)):
+        rand_h = tf.random.uniform(
+            shape=[], minval=min_size[0], maxval=max_size[0], dtype=tf.int32
+        )
+        rand_w = tf.random.uniform(
+            shape=[], minval=min_size[1], maxval=max_size[1], dtype=tf.int32
+        )
+
+        # ensure divisible by 2
+        rand_h = rand_h + (rand_h % 2)
+        rand_w = rand_w + (rand_w % 2)
+
+        img_nhwc = NCHW_to_NHWC(img_nchw)
+        img_nhwc = tfa.image.random_cutout(
+            img_nhwc, mask_size=(rand_h, rand_w), constant_values=0
+        ).numpy()
+
+        img_nchw = NHWC_to_NCHW(img_nhwc)
+
+        return img_nchw
