@@ -86,10 +86,10 @@ def create_cell_update_fn(
 def nca_looper(
     key: jax.random.PRNGKeyArray,
     params: Any,
-    state_grid: jnp.ndarray,
+    state_grid: Array,
     num_steps: int,
     cell_update_fn: Callable,
-) -> Tuple[Array, List[Array]]:
+) -> Tuple[Array, Array]:
     state_grid_sequence = []
     for _ in range(num_steps):
         _, key = jax.random.split(key)
@@ -98,7 +98,7 @@ def nca_looper(
 
     pred_rgba = state_grid[:, :4]
 
-    return pred_rgba, state_grid_sequence
+    return pred_rgba, jnp.asarray(state_grid_sequence)
 
 
 def train_step(
@@ -224,6 +224,7 @@ def train_and_evaluate(config: NCAConfig):
 
     tb_writer = SummaryWriter(config.log_dir)
 
+    # create a partial function for the train_step function
     p_train_step = partial(
         train_step,
         cell_update_fn=cell_update_fn,
@@ -231,6 +232,7 @@ def train_and_evaluate(config: NCAConfig):
         apply_grad=True,
     )
 
+    # jit the train_step function
     train_step_jit = jax.jit(p_train_step)
 
     for step in range(state.step, config.num_steps):
@@ -316,7 +318,7 @@ def train_and_evaluate(config: NCAConfig):
         data_key, _ = jax.random.split(data_key)
 
 
-def evaluate(config: NCAConfig):
+def evaluate(config: NCAConfig, output_video_path=None):
     state, _ = create_state(config)
 
     if config.checkpoint_dir:
@@ -332,10 +334,12 @@ def evaluate(config: NCAConfig):
     )
 
     nca_looper_fn = partial(
-        nca_looper, cell_update_fn=cell_update_fn, num_steps=config.num_steps
+        nca_looper, cell_update_fn=cell_update_fn, num_steps=config.num_nca_steps
     )
 
-    num_loops = int(config.total_eval_steps // config.num_steps)
+    nca_looper_fn = jax.jit(nca_looper_fn)  # type: ignore
+
+    num_loops = int(config.total_eval_steps // config.num_nca_steps)
 
     state_grid = dataset_generator.seed_state[np.newaxis, ...]
     state_grid_cache = []
@@ -343,11 +347,18 @@ def evaluate(config: NCAConfig):
     key = jax.random.PRNGKey(0)
     for n in range(num_loops):
         _, state_grid_array = nca_looper_fn(key, state.params, state_grid)
-        state_grid_cache.append(state_grid_array)
         state_grid = state_grid_array[-1]
+        state_grid_cache.append(jnp.squeeze(state_grid_array))
+
+        if 1:
+            state_grid = NCADataGenerator.random_cutout(state_grid, max_size=(16, 16))
+            state_grid = NCADataGenerator.random_cutout(state_grid, max_size=(16, 16))
+
+    state_grid_cache = jnp.array(state_grid_cache)  # type: ignore
 
     state_grid_cache = jnp.concatenate(state_grid_cache, axis=0)
-    state_grid_cache = jnp.squeeze(state_grid_cache)
+    state_grid_cache = jnp.clip(state_grid_cache, 0.0, 1.0)
+
     rgba = state_grid_cache[:, :4]
     rgb = rgba[:, :3] * rgba[:, 3:4]
 
@@ -355,6 +366,13 @@ def evaluate(config: NCAConfig):
     rgb = jnp.transpose(rgb, (0, 2, 3, 1))
 
     # resize with tf
-    rgb = tf.image.resize(rgb, (256, 256)).numpy()
+    rgb = tf.image.resize(
+        rgb, (256, 256), method=tf.image.ResizeMethod.NEAREST_NEIGHBOR
+    ).numpy()
 
-    make_video(rgb, config.evaluation_video_file)
+    rgb = (rgb * 255).astype(np.uint8)
+
+    if output_video_path is None:
+        make_video(rgb, config.evaluation_video_file)
+    else:
+        make_video(rgb, output_video_path)
