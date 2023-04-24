@@ -20,8 +20,8 @@ def NCHW_to_NHWC(x: jnp.ndarray) -> jnp.ndarray:
     return jnp.transpose(x, (0, 2, 3, 1))
 
 
-def NHWC_to_NCWH(x: jnp.ndarray) -> jnp.ndarray:
-    """Converts an array from the NHWC format to the NCWH format.
+def NHWC_to_NCHW(x: jnp.ndarray) -> jnp.ndarray:
+    """Converts an array from the NHWC format to the NCHW format.
 
     Args:
         x: The input array in NHWC format.
@@ -97,9 +97,13 @@ def make_video(
             image = np.asarray(image[..., :3]).astype(np.uint8)
             image = np.squeeze(image)
 
-            cv2.imwrite(f"{tempdir}/{i}.png", image)
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-        clip = ImageSequenceClip(glob(f"{tempdir}/*.png"), fps=fps)
+            cv2.imwrite(f"{tempdir}/{str(i).zfill(5)}.png", image)
+
+        image_files = glob(f"{tempdir}/*.png")
+        image_files = sorted(image_files)  # , key=lambda x: int(x.split("/")[-1][:-4]))
+        clip = ImageSequenceClip(image_files, fps=fps)
         clip.write_videofile(filename, fps=fps)
 
 
