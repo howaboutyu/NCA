@@ -83,6 +83,24 @@ def create_cell_update_fn(
     return cell_update_fn
 
 
+def nca_looper(
+    key: jax.random.PRNGKeyArray,
+    params: Any,
+    state_grid: jnp.ndarray,
+    num_steps: int,
+    cell_update_fn: Callable,
+) -> Tuple[Array, List[Array]]:
+    state_grid_sequence = []
+    for _ in range(num_steps):
+        _, key = jax.random.split(key)
+        state_grid = cell_update_fn(key, state_grid, params)
+        state_grid_sequence.append(state_grid)
+
+    pred_rgba = state_grid[:, :4]
+
+    return pred_rgba, state_grid_sequence
+
+
 def train_step(
     key: jax.random.PRNGKeyArray,
     state: train_state.TrainState,
@@ -110,14 +128,13 @@ def train_step(
     ) -> Tuple[Array, Tuple[Array, Array]]:
         # Returns loss reduced over batch and spatial dimensions and loss not reduced over batch and spatial dimensions
 
-        state_grid_sequence = []
-        for _ in range(num_steps):
-            _, key = jax.random.split(key)
-            state_grid = cell_update_fn(key, state_grid, params)
-            state_grid_sequence.append(state_grid)
-
-        # extract the predicted RGB values and alpha channel from the state grid
-        pred_rgba = state_grid[:, :4]
+        pred_rgba, state_grid_sequence = nca_looper(
+            key,
+            params,
+            state_grid,
+            num_steps=num_steps,
+            cell_update_fn=cell_update_fn,
+        )
 
         # used for visualizing the state grid during training
         jnp_state_grid_sequence = jnp.asarray(state_grid_sequence)
@@ -147,6 +164,7 @@ def evaluate_step(
     cell_update_fn: Callable,
     num_steps: int = 64,
     reduce_loss: bool = True,
+    key=jax.random.PRNGKey(0),
 ) -> Tuple[List[Array], Array]:
     """Runs a single evaluation step.
 
@@ -161,21 +179,13 @@ def evaluate_step(
         loss: The loss value for this step.
     """
 
-    # define a function that takes the model parameters and cell state grid as inputs and returns the predicted RGB values
-    def predict_fn(params: Any, state_grid: jnp.ndarray) -> Tuple[Array, List[Array]]:
-        state_grid_sequence = []
-        key = jax.random.PRNGKey(0)
-        for i in range(num_steps):
-            _, key = jax.random.split(key)
-            state_grid = cell_update_fn(key, state_grid, params)
-            state_grid_sequence.append(state_grid)
-
-        pred_rgba = state_grid[:, :4]
-
-        return pred_rgba, state_grid_sequence
-
-    # call the predict_fn with the current state parameters and cell state grid to get the predicted RGB values
-    pred_rgba, state_grids = predict_fn(state.params, state_grid)
+    pred_rgba, state_grids = nca_looper(
+        key,
+        params=state.params,
+        state_grid=state_grid,
+        num_steps=num_steps,
+        cell_update_fn=cell_update_fn,
+    )
 
     loss_value = mse(pred_rgba, target, reduce_loss)
 
@@ -215,7 +225,10 @@ def train_and_evaluate(config: NCAConfig):
     tb_writer = SummaryWriter(config.log_dir)
 
     p_train_step = partial(
-        train_step, cell_update_fn=cell_update_fn, num_steps=64, apply_grad=True
+        train_step,
+        cell_update_fn=cell_update_fn,
+        num_steps=config.num_steps,
+        apply_grad=True,
     )
 
     train_step_jit = jax.jit(p_train_step)
@@ -284,6 +297,7 @@ def train_and_evaluate(config: NCAConfig):
             tb_state_grids = alpha * tb_state_grids[:, :3]
             tb_state_grids = tb_state_grids[np.newaxis, ...]
 
+            # write to tb
             tb_writer.add_video(
                 f"val_video", vid_tensor=tb_state_grids, fps=30, global_step=state.step
             )
