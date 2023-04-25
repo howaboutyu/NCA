@@ -40,10 +40,19 @@ class NCADataGenerator:
         if damage == False:
             return self.pool[indices], indices
         else:
+            # just damage K sample
             pool_sample = self.pool[indices]
-            damaged_pool_sample = NCADataGenerator.random_cutout(pool_sample)
 
-            return damaged_pool_sample, indices
+            sample_id_to_damage = jax.random.randint(
+                key, shape=(), minval=0, maxval=len(indices)
+            )
+            sampel_to_damage = pool_sample[sample_id_to_damage][np.newaxis, ...]
+
+            sampel_to_damage = NCADataGenerator.random_cutout(sampel_to_damage)
+
+            pool_sample[sample_id_to_damage] = sampel_to_damage
+
+            return pool_sample, indices
 
     def update_pool(self, indices: Any, new_states: np.ndarray):
         self.pool[indices] = new_states
