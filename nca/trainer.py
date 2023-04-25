@@ -350,18 +350,21 @@ def evaluate(config: NCAConfig, output_video_path=None):
         state_grid = state_grid_array[-1]
         state_grid_cache.append(jnp.squeeze(state_grid_array))
 
-        if 1:
-            state_grid = NCADataGenerator.random_cutout(state_grid, max_size=(16, 16))
-            state_grid = NCADataGenerator.random_cutout(state_grid, max_size=(16, 16))
+        state_grid = NCADataGenerator.random_cutout(state_grid, max_size=(16, 16))
+        state_grid = NCADataGenerator.random_cutout(state_grid, max_size=(16, 16))
+
 
     state_grid_cache = jnp.array(state_grid_cache)  # type: ignore
 
     state_grid_cache = jnp.concatenate(state_grid_cache, axis=0)
     state_grid_cache = jnp.clip(state_grid_cache, 0.0, 1.0)
 
-    rgba = np.asarray(state_grid_cache)[:, :4]
+    # save it
+    np.save("/tmp/state_grid_cache.npy", state_grid_cache)
 
-    rgb = rgba[:, :3] * rgba[:, 3:4]
+    rgba = np.asarray(state_grid_cache)[:, 0:4]
+
+    rgb = rgba[:, :3]  * rgba[:, 3:4]
 
     # NCHW -> NHWC
     rgb = jnp.transpose(rgb, (0, 2, 3, 1))
