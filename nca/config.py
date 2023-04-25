@@ -7,7 +7,7 @@ class NCAConfig:
     dimensions: tuple = (56, 56)
     model_output_len: int = 16
     batch_size: int = 16
-    num_steps: int = 100000
+    total_training_steps: int = 100000
     eval_every: int = 500
     learning_rate: float = 2e-4
     pool_size: int = 1000
