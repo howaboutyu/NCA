@@ -139,22 +139,19 @@ def train_step(
         # used for visualizing the state grid during training
         jnp_state_grid_sequence = jnp.asarray(state_grid_sequence)
 
-        return mse(pred_rgba, target), (
-            state_grid,
-            jnp_state_grid_sequence,
-        )
+        return mse(pred_rgba, target), (jnp_state_grid_sequence,)
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
     (
         loss,
-        (final_state_grid, state_grid_sequence),
+        (state_grid_sequence),
     ), grad = grad_fn(state.params, state_grid, key)
 
     if apply_grad:
         state = state.apply_gradients(grads=grad)
 
-    return state, loss, final_state_grid, state_grid_sequence
+    return state, loss, state_grid_sequence
 
 
 def evaluate_step(
@@ -244,7 +241,7 @@ def train_and_evaluate(config: NCAConfig):
         # use mse to find the element in the batch with the highest loss
         loss_non_reduced = mse(state_grids[:, :4], train_target, reduce_mean=False)
         loss_per_batch = jnp.mean(loss_non_reduced, axis=(1, 2, 3))
-
+        print(f"loss_per_batch: {loss_per_batch}")
         # get the batch_id with the maximum loss
         batch_id_worst = jnp.argmax(loss_per_batch)
         print(f"Worst batch id : {batch_id_worst}")
@@ -253,7 +250,6 @@ def train_and_evaluate(config: NCAConfig):
         (
             state,
             loss,
-            final_training_grid,
             training_grid_array,
         ) = train_step_jit(
             key,
@@ -262,6 +258,8 @@ def train_and_evaluate(config: NCAConfig):
             train_target,
         )
 
+        # Last element of training_grid_array is the final state grid
+        final_training_grid = np.squeeze(training_grid_array[-1])
         dataset_generator.update_pool(state_grid_indices, final_training_grid)
         print(f"state_grid_indices: {state_grid_indices}")
         print(f"Step : {step}, loss : {loss}")
