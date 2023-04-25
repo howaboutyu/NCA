@@ -1,10 +1,10 @@
 # This is for replicating https://distill.pub/2020/growing-ca/
 
 weights_dir: 'ckpts/nca_exp1'
-checkpoint_dir: 'ckpts/nca_exp1'
+checkpoint_dir: 'ckpts/damage_ckpt'
 pool_size: 1000
 target_filename: "emoji_imgs/smile.png"
-damage: False 
+damage: True 
 
 
 
