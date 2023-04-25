@@ -31,13 +31,19 @@ class NCADataGenerator:
 
         self.pool = np.asarray([self.seed_state] * self.pool_size)
 
-    def sample(self, key: Any) -> Tuple[jax.Array, jax.Array]:
+    def sample(self, key: Any, damage: bool) -> Tuple[jax.Array, jax.Array]:
         # sample a batch of random indices from the pool
         indices = jax.random.randint(
             key, shape=(self.batch_size,), minval=0, maxval=self.pool_size
         )
 
-        return self.pool[indices], indices
+        if damage == False:
+            return self.pool[indices], indices
+        else:
+            pool_sample = self.pool[indices]
+            damaged_pool_sample = NCADataGenerator.random_cutout(pool_sample)
+
+            return damaged_pool_sample, indices
 
     def update_pool(self, indices: Any, new_states: np.ndarray):
         self.pool[indices] = new_states

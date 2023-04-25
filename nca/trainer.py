@@ -17,7 +17,7 @@ from nca.model import UpdateModel
 from nca.nca import create_perception_kernel, perceive, cell_update
 from nca.config import NCAConfig
 from nca.dataset import NCADataGenerator
-from nca.utils import make_video, NCHW_to_NHWC, state_grid_to_rgb, mse
+from nca.utils import make_video, NCHW_to_NHWC, NCHW_to_NHWC, mse
 
 Array = Any
 
@@ -237,7 +237,9 @@ def train_and_evaluate(config: NCAConfig):
 
     for step in range(state.step, config.num_steps):
         # get the training data
-        state_grids, state_grid_indices = dataset_generator.sample(data_key)
+        state_grids, state_grid_indices = dataset_generator.sample(
+            data_key, config.damage
+        )
 
         # use mse to find the element in the batch with the highest loss
         loss_non_reduced = mse(state_grids[:, :4], train_target, reduce_mean=False)
@@ -353,7 +355,6 @@ def evaluate(config: NCAConfig, output_video_path=None):
         state_grid = NCADataGenerator.random_cutout(state_grid, max_size=(16, 16))
         state_grid = NCADataGenerator.random_cutout(state_grid, max_size=(16, 16))
 
-
     state_grid_cache = jnp.array(state_grid_cache)  # type: ignore
 
     state_grid_cache = jnp.concatenate(state_grid_cache, axis=0)
@@ -364,7 +365,7 @@ def evaluate(config: NCAConfig, output_video_path=None):
 
     rgba = np.asarray(state_grid_cache)[:, 0:4]
 
-    rgb = rgba[:, :3]  * rgba[:, 3:4]
+    rgb = rgba[:, :3] * rgba[:, 3:4]
 
     # NCHW -> NHWC
     rgb = jnp.transpose(rgb, (0, 2, 3, 1))
