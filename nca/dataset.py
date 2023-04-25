@@ -31,7 +31,7 @@ class NCADataGenerator:
 
         self.pool = np.asarray([self.seed_state] * self.pool_size)
 
-    def sample(self, key: Any, damage: bool) -> Tuple[jax.Array, jax.Array]:
+    def sample(self, key: Any, damage: bool = False) -> Tuple[jax.Array, jax.Array]:
         # sample a batch of random indices from the pool
         indices = jax.random.randint(
             key, shape=(self.batch_size,), minval=0, maxval=self.pool_size
