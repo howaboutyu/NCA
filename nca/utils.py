@@ -97,7 +97,8 @@ def make_video(
             image = np.asarray(image[..., :3]).astype(np.uint8)
             image = np.squeeze(image)
 
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            if image.shape[-1] != 1:
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
             cv2.imwrite(f"{tempdir}/{str(i).zfill(5)}.png", image)
 
