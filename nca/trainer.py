@@ -25,7 +25,7 @@ Array = Any
 def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
     # Create a cosine learning rate decay schedule
     learning_rate_schedule = optax.cosine_decay_schedule(
-        init_value=config.learning_rate, decay_steps=config.num_steps
+        init_value=config.learning_rate, decay_steps=config.total_training_steps
     )
 
     # Create an Adam optimizer with the learning rate schedule
@@ -87,11 +87,11 @@ def nca_looper(
     key: jax.random.PRNGKeyArray,
     params: Any,
     state_grid: Array,
-    num_steps: int,
+    num_nca_steps: int,
     cell_update_fn: Callable,
 ) -> Tuple[Array, Array]:
     state_grid_sequence = []
-    for _ in range(num_steps):
+    for _ in range(num_nca_steps):
         _, key = jax.random.split(key)
         state_grid = cell_update_fn(key, state_grid, params)
         state_grid_sequence.append(state_grid)
@@ -107,7 +107,7 @@ def train_step(
     state_grid: Array,
     target: Array,
     cell_update_fn: Callable,
-    num_steps: Array = 64,
+    num_nca_steps: Array = 64,
     apply_grad: bool = True,
 ) -> Tuple[train_state.TrainState, Array, Array, Array]:
     """Runs a single training step.
@@ -132,7 +132,7 @@ def train_step(
             key,
             params,
             state_grid,
-            num_steps=num_steps,
+            num_nca_steps=num_nca_steps,
             cell_update_fn=cell_update_fn,
         )
 
@@ -162,7 +162,7 @@ def evaluate_step(
     state_grid: Array,
     target: Array,
     cell_update_fn: Callable,
-    num_steps: int = 64,
+    num_nca_steps: int = 64,
     reduce_loss: bool = True,
     key=jax.random.PRNGKey(0),
 ) -> Tuple[List[Array], Array]:
@@ -183,7 +183,7 @@ def evaluate_step(
         key,
         params=state.params,
         state_grid=state_grid,
-        num_steps=num_steps,
+        num_nca_steps=num_nca_steps,
         cell_update_fn=cell_update_fn,
     )
 
@@ -205,7 +205,7 @@ def train_and_evaluate(config: NCAConfig):
     if config.weights_dir:
         state = checkpoints.restore_checkpoint(config.weights_dir, state)
 
-    cell_update_fn = create_cell_update_fn(config, state.apply_fn)
+    cell_update_fn = create_cell_update_fn(config, state.apply_fn, use_jit=False)
 
     dataset_generator = NCADataGenerator(
         pool_size=config.pool_size,
@@ -228,14 +228,14 @@ def train_and_evaluate(config: NCAConfig):
     p_train_step = partial(
         train_step,
         cell_update_fn=cell_update_fn,
-        num_steps=config.num_steps,
+        num_nca_steps=config.num_nca_steps,
         apply_grad=True,
     )
 
     # jit the train_step function
     train_step_jit = jax.jit(p_train_step)
 
-    for step in range(state.step, config.num_steps):
+    for step in range(state.step, config.total_training_steps):
         # get the training data
         state_grids, state_grid_indices = dataset_generator.sample(
             data_key, config.damage
@@ -288,7 +288,11 @@ def train_and_evaluate(config: NCAConfig):
             seed_grid = dataset_generator.seed_state[np.newaxis, ...]
 
             val_state_grids, loss = evaluate_step(
-                state, seed_grid, train_target[:1], cell_update_fn, num_steps=800
+                state,
+                seed_grid,
+                train_target[:1],
+                cell_update_fn,
+                num_nca_steps=config.total_eval_steps,
             )
 
             tb_writer.add_scalar("val_loss", np.asarray(loss), state.step)
@@ -336,7 +340,7 @@ def evaluate(config: NCAConfig, output_video_path=None):
     )
 
     nca_looper_fn = partial(
-        nca_looper, cell_update_fn=cell_update_fn, num_steps=config.num_nca_steps
+        nca_looper, cell_update_fn=cell_update_fn, num_nca_steps=config.num_nca_steps
     )
 
     nca_looper_fn = jax.jit(nca_looper_fn)  # type: ignore
