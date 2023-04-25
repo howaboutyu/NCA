@@ -8,7 +8,10 @@ import cv2  # type: ignore
 from typing import List, Any, Union
 
 
-def NCHW_to_NHWC(x: jnp.ndarray) -> jnp.ndarray:
+Array = Union[np.ndarray, jnp.ndarray]
+
+
+def NCHW_to_NHWC(x: Array) -> Array:
     """Converts an array from the NCWH format to the NHWC format.
 
     Args:
@@ -17,10 +20,13 @@ def NCHW_to_NHWC(x: jnp.ndarray) -> jnp.ndarray:
     Returns:
         The output array in NHWC format.
     """
-    return jnp.transpose(x, (0, 2, 3, 1))
+    if isinstance(x, np.ndarray):
+        return np.transpose(x, (0, 2, 3, 1))
+    else:
+        return jnp.transpose(x, (0, 2, 3, 1))
 
 
-def NHWC_to_NCHW(x: jnp.ndarray) -> jnp.ndarray:
+def NHWC_to_NCHW(x: Array) -> Array:
     """Converts an array from the NHWC format to the NCHW format.
 
     Args:
@@ -29,10 +35,13 @@ def NHWC_to_NCHW(x: jnp.ndarray) -> jnp.ndarray:
     Returns:
         The output array in NCWH format.
     """
-    return jnp.transpose(x, (0, 3, 1, 2))
+    if isinstance(x, np.ndarray):
+        return np.transpose(x, (0, 3, 1, 2))
+    else:
+        return jnp.transpose(x, (0, 3, 1, 2))
 
 
-def alpha_mask(x: jnp.ndarray) -> jnp.ndarray:
+def alpha_mask(x: Array) -> Array:
     """Masks an array using the alpha channel.
 
     Args:
@@ -46,13 +55,13 @@ def alpha_mask(x: jnp.ndarray) -> jnp.ndarray:
     return x[:, :, :, :3] * x[:, :, :, 3:4]
 
 
-def state_grid_to_rgb(state_grid: jnp.ndarray) -> jnp.ndarray:
-    # extract the predicted RGB values and alpha channel from the state grid
-    state_grid = jnp.clip(state_grid, 0.0, 1.0)
-    alpha = state_grid[:, 3:4]
-    rgb = state_grid[:, :3]
-    rgb = rgb * alpha
-    return rgb
+# def state_grid_to_rgb(state_grid: jnp.ndarray) -> jnp.ndarray:
+#    # extract the predicted RGB values and alpha channel from the state grid
+#    state_grid = jnp.clip(state_grid, 0.0, 1.0)
+#    alpha = state_grid[:, 3:4]
+#    rgb = state_grid[:, :3]
+#    rgb = rgb * alpha
+#    return rgb
 
 
 def make_gif(
