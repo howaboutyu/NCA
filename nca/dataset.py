@@ -94,3 +94,16 @@ class NCADataGenerator:
         img_nchw = NHWC_to_NCHW(img_nhwc)
 
         return img_nchw
+
+    @staticmethod
+    def random_rotate(img_nchw, min_angle=-np.pi, max_angle=np.pi):
+        rand_angle = tf.random.uniform(
+            shape=[], minval=min_angle, maxval=max_angle, dtype=tf.float32
+        )
+
+        img_nhwc = NCHW_to_NHWC(img_nchw)
+        img_nhwc = tfa.image.rotate(img_nhwc, rand_angle).numpy()
+
+        img_nchw = NHWC_to_NCHW(img_nhwc)
+
+        return img_nchw
