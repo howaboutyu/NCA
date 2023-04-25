@@ -12,7 +12,8 @@ class NCAConfig:
     learning_rate: float = 2e-4
     pool_size: int = 1000
     target_filename: str = "emoji_imgs/skier.png"
-    checkpoint_dir: str = "checkpoints"
+    weights_dir: str = "checkpoints"  # where to load ckpt
+    checkpoint_dir: str = "checkpoints"  # where to save ckpt
     checkpoint_every: int = 500
     validation_video_dir: str = "validation_videos"
     log_dir: str = "logs"

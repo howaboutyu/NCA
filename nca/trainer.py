@@ -202,8 +202,8 @@ def train_and_evaluate(config: NCAConfig):
 
     state, learning_rate_schedule = create_state(config)
 
-    if config.checkpoint_dir:
-        state = checkpoints.restore_checkpoint(config.checkpoint_dir, state)
+    if config.weights_dir:
+        state = checkpoints.restore_checkpoint(config.weights_dir, state)
 
     cell_update_fn = create_cell_update_fn(config, state.apply_fn)
 
@@ -323,8 +323,8 @@ def train_and_evaluate(config: NCAConfig):
 def evaluate(config: NCAConfig, output_video_path=None):
     state, _ = create_state(config)
 
-    if config.checkpoint_dir:
-        state = checkpoints.restore_checkpoint(config.checkpoint_dir, state)
+    if config.weights_dir:
+        state = checkpoints.restore_checkpoint(config.weights_dir, state)
 
     cell_update_fn = create_cell_update_fn(config, state.apply_fn)
 
@@ -360,7 +360,8 @@ def evaluate(config: NCAConfig, output_video_path=None):
     state_grid_cache = jnp.concatenate(state_grid_cache, axis=0)
     state_grid_cache = jnp.clip(state_grid_cache, 0.0, 1.0)
 
-    # save it
+    # TODO: add path to config.
+    # save the entire state_grid_cache as npy.
     np.save("/tmp/state_grid_cache.npy", state_grid_cache)
 
     rgba = np.asarray(state_grid_cache)[:, 0:4]
