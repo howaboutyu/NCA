@@ -94,7 +94,7 @@ def make_video(
     """Creates a movie from a list of images.
 
     Args:
-        images: A list of images.
+        images: A list of images with values in the range [0, 1]
         filename: The name of the GIF file.
         fps: The number of frames per second. Default is 10.
 
@@ -103,6 +103,7 @@ def make_video(
     with tempfile.TemporaryDirectory() as tempdir:
         # write images to tempdir
         for i, image in enumerate(images):
+            image = image * 255.0
             image = np.asarray(image[..., :3]).astype(np.uint8)
             image = np.squeeze(image)
 
