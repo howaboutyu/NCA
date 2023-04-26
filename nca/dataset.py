@@ -36,6 +36,7 @@ class NCADataGenerator:
         indices = jax.random.randint(
             key, shape=(self.batch_size,), minval=0, maxval=self.pool_size
         )
+        indices = np.asarray(indices)
 
         if damage == False:
             return self.pool[indices], indices
