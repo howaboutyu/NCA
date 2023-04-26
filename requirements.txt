@@ -2,8 +2,9 @@ flax
 optax
 black
 moviepy
-tensorboardX
+tensorboardX==2.5
 pytest
 opencv-python
+imageio==2.27
 tensorflow
 tensorflow_addons
