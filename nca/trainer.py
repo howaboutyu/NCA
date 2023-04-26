@@ -236,6 +236,7 @@ def train_and_evaluate(config: NCAConfig):
         )
 
         # use mse to find the element in the batch with the highest loss
+        # TODO : move computing batch_id_worst to dataset generator
         loss_non_reduced = mse(state_grids[:, :4], train_target, reduce_mean=False)
         loss_per_batch = jnp.mean(loss_non_reduced, axis=(1, 2, 3))
         print(f"loss_per_batch: {loss_per_batch}")
@@ -264,14 +265,13 @@ def train_and_evaluate(config: NCAConfig):
         if step % config.log_every == 0:
             training_grid_array = np.clip(training_grid_array, 0.0, 1.0)
 
-            alpha = training_grid_array[:, :, 3:4] > 0.1
-            training_grid_array = alpha * training_grid_array[:, :, :3]
+            alpha = training_grid_array[:, :, 3:4]
+            rgb = training_grid_array[:, :, :3]
+            training_grid_array = alpha * rgb
 
             # training_grid_array has shape (T, N, C, H, W) but add_video needs (N, T, C, H, W)
             training_grid_array = np.transpose(training_grid_array, (1, 0, 2, 3, 4))
-            tb_writer.add_video(
-                "training_grid", training_grid_array, state.step, fps=10
-            )
+            tb_writer.add_video("training_grid", training_grid_array, state.step, fps=10)
 
             tb_writer.add_scalar("loss", np.asarray(loss), state.step)
 

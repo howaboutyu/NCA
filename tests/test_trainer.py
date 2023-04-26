@@ -90,7 +90,7 @@ def test_train_step(dummy_config, dummy_state):
     state_grid = NHWC_to_NCHW(state_grid)
     target = NHWC_to_NCHW(target)
 
-    state, loss, _, _ = train_step(
+    state, loss, _ = train_step(
         key,
         dummy_state,
         state_grid,
