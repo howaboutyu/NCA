@@ -139,14 +139,11 @@ def train_step(
         # used for visualizing the state grid during training
         jnp_state_grid_sequence = jnp.asarray(state_grid_sequence)
 
-        return mse(pred_rgba, target), (jnp_state_grid_sequence,)
+        return mse(pred_rgba, target), jnp_state_grid_sequence
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
-    (
-        loss,
-        (state_grid_sequence),
-    ), grad = grad_fn(state.params, state_grid, key)
+    (loss, state_grid_sequence), grad = grad_fn(state.params, state_grid, key)
 
     if apply_grad:
         state = state.apply_gradients(grads=grad)

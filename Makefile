@@ -1,6 +1,9 @@
 # Variables
 INSTALL_SCRIPT = ./scripts/install_jax_gpu.sh
 REQUIREMENTS_FILE = requirements.txt
+DOCKER_IMAGE = nca
+DOCKERFILE = Dockerfile
+
 
 # Targets
 .PHONY: setup clean
@@ -21,3 +24,9 @@ clean:
     	else \
     	    echo "Aborted." ; \
     	fi
+
+
+docker-build:
+	@echo "Building Docker image $(DOCKER_IMAGE)..."
+	docker build -t $(DOCKER_IMAGE) -f $(DOCKERFILE) .
+	@echo "Done building docker image ✌️"
