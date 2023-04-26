@@ -235,14 +235,12 @@ def train_and_evaluate(config: NCAConfig):
             data_key, config.damage
         )
 
-        # use mse to find the element in the batch with the highest loss
         # TODO : move computing batch_id_worst to dataset generator
         loss_non_reduced = mse(state_grids[:, :4], train_target, reduce_mean=False)
         loss_per_batch = jnp.mean(loss_non_reduced, axis=(1, 2, 3))
-        print(f"loss_per_batch: {loss_per_batch}")
+
         # get the batch_id with the maximum loss
         batch_id_worst = jnp.argmax(loss_per_batch)
-        print(f"Worst batch id : {batch_id_worst}")
         state_grids[batch_id_worst] = dataset_generator.seed_state
 
         (
@@ -256,7 +254,7 @@ def train_and_evaluate(config: NCAConfig):
             train_target,
         )
 
-        # Last element of training_grid_array is the final state grid
+        # replace the pool with final state grid
         final_training_grid = np.squeeze(training_grid_array[-1])
         dataset_generator.update_pool(state_grid_indices, final_training_grid)
         print(f"state_grid_indices: {state_grid_indices}")
@@ -271,7 +269,9 @@ def train_and_evaluate(config: NCAConfig):
 
             # training_grid_array has shape (T, N, C, H, W) but add_video needs (N, T, C, H, W)
             training_grid_array = np.transpose(training_grid_array, (1, 0, 2, 3, 4))
-            tb_writer.add_video("training_grid", training_grid_array, state.step, fps=10)
+            tb_writer.add_video(
+                "training_grid", training_grid_array, state.step, fps=10
+            )
 
             tb_writer.add_scalar("loss", np.asarray(loss), state.step)
 
