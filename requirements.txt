@@ -2,7 +2,7 @@ flax
 optax
 black
 moviepy
-tensorboardX==2.5
+tensorboardX
 pytest
 opencv-python
 imageio==2.27
