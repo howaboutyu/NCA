@@ -6,7 +6,7 @@ import optax  # type: ignore
 from dataclasses import dataclass
 import cv2  # type: ignore
 import numpy as np
-from typing import Tuple, List, Dict, Any, Callable
+from typing import Tuple, List, Dict, Any, Callable, Optional
 import tensorflow as tf  # type: ignore
 from tqdm import tqdm  # type: ignore
 import os
@@ -107,9 +107,9 @@ def train_step(
     state_grid: Array,
     target: Array,
     cell_update_fn: Callable,
-    num_nca_steps: Array = 64,
-    apply_grad: bool = True,
-) -> Tuple[train_state.TrainState, Array, Array, Array]:
+    num_nca_steps: int = 64,
+    apply_grad: Optional[bool] = True,
+) -> Tuple[train_state.TrainState, Array, Array]:
     """Runs a single training step.
 
     Args:
@@ -120,12 +120,13 @@ def train_step(
         cell_update_fn: A function that updates the cell state grid using the provided model function and parameters.
 
     Returns:
-        *TODO*
+        A tuple of the new training state, the loss, and the entire state grid sequence with config.num_nca_steps elements.
+
     """
 
     def loss_fn(
         params: jnp.ndarray, state_grid: jnp.ndarray, key: jax.random.PRNGKeyArray
-    ) -> Tuple[Array, Tuple[Array, Array]]:
+    ) -> Tuple[Array, Array]:
         # Returns loss reduced over batch and spatial dimensions and loss not reduced over batch and spatial dimensions
 
         pred_rgba, state_grid_sequence = nca_looper(
@@ -210,9 +211,6 @@ def train_and_evaluate(config: NCAConfig):
 
     train_target = dataset_generator.get_target(config.target_filename)
 
-    # key for data generator
-    data_key = jax.random.PRNGKey(0)
-
     # create a random key for generating subkeys
     key = jax.random.PRNGKey(0)
 
@@ -231,9 +229,7 @@ def train_and_evaluate(config: NCAConfig):
 
     for step in range(state.step, config.total_training_steps):
         # get the training data
-        state_grids, state_grid_indices = dataset_generator.sample(
-            data_key, config.damage
-        )
+        state_grids, state_grid_indices = dataset_generator.sample(key, config.damage)
 
         # TODO : move computing batch_id_worst to dataset generator
         loss_non_reduced = mse(state_grids[:, :4], train_target, reduce_mean=False)
@@ -261,13 +257,13 @@ def train_and_evaluate(config: NCAConfig):
         print(f"Step : {step}, loss : {loss}")
 
         if step % config.log_every == 0:
+            # Log training grids as a gif and display using tensorboardX
             training_grid_array = np.clip(training_grid_array, 0.0, 1.0)
-
             alpha = training_grid_array[:, :, 3:4]
             rgb = training_grid_array[:, :, :3]
             training_grid_array = alpha * rgb
 
-            # training_grid_array has shape (T, N, C, H, W) but add_video needs (N, T, C, H, W)
+            # training_grid_array has shape (T, N, C, H, W) but `add_video` fn needs (N, T, C, H, W)
             training_grid_array = np.transpose(training_grid_array, (1, 0, 2, 3, 4))
             tb_writer.add_video(
                 "training_grid", training_grid_array, state.step, fps=10
@@ -276,10 +272,12 @@ def train_and_evaluate(config: NCAConfig):
             tb_writer.add_scalar("loss", np.asarray(loss), state.step)
 
             lr = learning_rate_schedule(state.step)
+            print(f"Learning rate : {lr}")
             tb_writer.add_scalar("lr", np.asarray(lr), state.step)
 
         if step % config.eval_every == 0:
-            # get the seed
+            # Evaluate the model starting with a seed state and propagate for `config.total_eval_steps` steps
+            # The gif is also logged with tensorboardX
             seed_grid = dataset_generator.seed_state[np.newaxis, ...]
 
             val_state_grids, loss = evaluate_step(
@@ -311,15 +309,25 @@ def train_and_evaluate(config: NCAConfig):
             make_video(val_state_grids, output_video_file)
 
         if step % config.checkpoint_every == 0 and config.checkpoint_dir:
+            # save checkpoint
             checkpoints.save_checkpoint(
                 config.checkpoint_dir, state, step=state.step, keep=3
             )
 
+        # split the key for the next step
         key, _ = jax.random.split(key)
-        data_key, _ = jax.random.split(data_key)
 
 
-def evaluate(config: NCAConfig, output_video_path=None):
+def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None:
+    """This function evaluates the model for `config.total_eval_steps` steps starting with a seed state.
+        The output is a video (mp4) of the NCA propagation.
+
+    Args:
+        config (NCAConfig): The config object.
+        output_video_path (optional):
+            Where to save the video path, (sometime like /abc/eval.mp4). Defaults to None.
+            if none then the video is saved to `config.evaluation_video_file`
+    """
     state, _ = create_state(config)
 
     if config.weights_dir:
@@ -359,8 +367,8 @@ def evaluate(config: NCAConfig, output_video_path=None):
     state_grid_cache = jnp.concatenate(state_grid_cache, axis=0)
     state_grid_cache = jnp.clip(state_grid_cache, 0.0, 1.0)
 
-    # TODO: add path to config.
     # save the entire state_grid_cache as npy.
+    # TODO: add path to config.
     np.save("/tmp/state_grid_cache.npy", state_grid_cache)
 
     rgba = np.asarray(state_grid_cache)[:, 0:4]
