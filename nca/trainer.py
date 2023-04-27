@@ -231,6 +231,7 @@ def train_and_evaluate(config: NCAConfig):
 
     for step in range(state.step, config.total_training_steps):
         # get the training data
+
         state_grids, state_grid_indices = dataset_generator.sample(
             data_key, config.damage
         )
