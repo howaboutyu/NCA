@@ -32,7 +32,7 @@ class NCADataGenerator:
         self.pool = np.asarray([self.seed_state] * self.pool_size)
 
     def sample(
-        self, key: Any, damage: bool = False, K: int = 5
+        self, key: Any, damage: bool = False, K: int = 2
     ) -> Tuple[jax.Array, jax.Array]:
         # sample a batch of random indices from the pool
         indices = jax.random.randint(
@@ -92,7 +92,7 @@ class NCADataGenerator:
         return jnp.asarray(target)
 
     @staticmethod
-    def random_cutout(img_nchw, min_size=(4, 4), max_size=(32, 32)):
+    def random_cutout(img_nchw, min_size=(2, 2), max_size=(16, 16)):
         rand_h = tf.random.uniform(
             shape=[], minval=min_size[0], maxval=max_size[0], dtype=tf.int32
         )
