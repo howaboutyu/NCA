@@ -30,3 +30,16 @@ docker-build:
 	@echo "Building Docker image $(DOCKER_IMAGE)..."
 	docker build -t $(DOCKER_IMAGE) -f $(DOCKERFILE) .
 	@echo "Done building docker image ✌️"
+
+
+start-devel:
+	@echo "Starting development docker"
+	docker run -it \
+	    --gpus=all \
+	    --ipc=host \
+	    --ulimit memlock=-1 \
+	    --ulimit stack=67108864 \
+	    -v`pwd`:/nca \
+	    nca:latest \
+	    bash
+
