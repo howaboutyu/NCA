@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 
+
 from flax.training import checkpoints, train_state
 import optax  # type: ignore
 from dataclasses import dataclass
@@ -29,7 +30,9 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
     )
 
     # Create an Adam optimizer with the learning rate schedule
-    optimizer = optax.adam(learning_rate=learning_rate_schedule)
+    optimizer = optax.chain(
+        optax.adam(learning_rate=learning_rate_schedule),
+    )
 
     # Initialize the model with random weights
     model = UpdateModel(model_output_len=config.model_output_len)
@@ -147,6 +150,7 @@ def train_step(
     (loss, state_grid_sequence), grad = grad_fn(state.params, state_grid, key)
 
     if apply_grad:
+        grad = jax.tree_map(lambda g: g / (jnp.linalg.norm(g) + 1e-8), grad)
         state = state.apply_gradients(grads=grad)
 
     return state, loss, state_grid_sequence
@@ -229,15 +233,23 @@ def train_and_evaluate(config: NCAConfig):
 
     for step in range(state.step, config.total_training_steps):
         # get the training data
-        state_grids, state_grid_indices = dataset_generator.sample(key, config.damage)
+        state_grids, state_grid_indices = dataset_generator.sample(key, damage=False)
 
-        # TODO : move computing batch_id_worst to dataset generator
+        # TODO :
+        # * move computing batch_id_worst to dataset generator
+        # * combine setting seed_state and damage to a function in dataset_generator
+
         loss_non_reduced = mse(state_grids[:, :4], train_target, reduce_mean=False)
         loss_per_batch = jnp.mean(loss_non_reduced, axis=(1, 2, 3))
 
         # get the batch_id with the maximum loss
         batch_id_worst = jnp.argmax(loss_per_batch)
+        batch_id_best = jnp.argmin(loss_per_batch)
         state_grids[batch_id_worst] = dataset_generator.seed_state
+
+        sample_to_damage = state_grids[batch_id_best][np.newaxis, ...]
+        sample_to_damage = NCADataGenerator.random_cutout_circle(sample_to_damage)
+        state_grids[batch_id_best] = sample_to_damage[0]
 
         (
             state,
