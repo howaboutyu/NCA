@@ -111,6 +111,8 @@ def cell_update(
 
     # Stochastic update
     rand_mask = jax.random.uniform(key, shape=ds.shape[:-1]) < update_prob
+    rand_mask = rand_mask.astype(jnp.float32)
+
     ds = ds * rand_mask[..., jnp.newaxis]
 
     # Transpose: NHWC -> NCHW
