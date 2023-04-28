@@ -114,18 +114,18 @@ class NCADataGenerator:
         return img_nchw
 
     @staticmethod
-    def random_cutout_circle(img_nchw):
+    def random_cutout_circle(img_nchw, key):
         img_nhwc = NCHW_to_NHWC(img_nchw)
 
         n, h, w, _ = img_nhwc.shape
 
         x = tf.linspace(-1.0, 1.0, w)[None, None, :]
         y = tf.linspace(-1.0, 1.0, h)[None, :, None]
-        center = tf.random.uniform([2, n, 1, 1], -0.5, 0.5)
-        r = tf.random.uniform([n, 1, 1], 0.1, 0.4)
+        center = tf.random.uniform([2, n, 1, 1], -0.5, 0.5, seed=key)
+        r = tf.random.uniform([n, 1, 1], 0.1, 0.3, seed=key)
         x, y = (x - center[0]) / r, (y - center[1]) / r
         mask = tf.cast(x * x + y * y < 1.0, tf.float32)
-        img_masked = img_nhwc - mask[..., tf.newaxis]
+        img_masked = img_nhwc * (1.0 - mask[..., tf.newaxis])
         img_masked = np.asarray(img_masked)
         img_masked_nchw = NHWC_to_NCHW(img_masked)
         return img_masked_nchw
