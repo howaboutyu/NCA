@@ -238,7 +238,7 @@ def train_and_evaluate(config: NCAConfig):
         # get the training data
         state_grids, state_grid_indices = dataset_generator.sample(key, damage=False)
 
-        # TODO :
+        # TODO start
         # * move computing batch_id_worst to dataset generator
         # * combine setting seed_state and damage to a function in dataset_generator
 
@@ -251,8 +251,11 @@ def train_and_evaluate(config: NCAConfig):
         state_grids[batch_id_worst] = dataset_generator.seed_state
 
         sample_to_damage = state_grids[batch_id_best][np.newaxis, ...]
-        sample_to_damage = NCADataGenerator.random_cutout_circle(sample_to_damage)
-        state_grids[batch_id_best] = sample_to_damage[0]
+        sample_to_damage = NCADataGenerator.random_cutout_circle(
+            sample_to_damage, key[0]
+        )
+        state_grids[batch_id_best] = sample_to_damage[0].astype(np.float32)
+        # TODO end
 
         (
             state,
@@ -268,6 +271,8 @@ def train_and_evaluate(config: NCAConfig):
         # replace the pool with final state grid
         final_training_grid = np.squeeze(training_grid_array[-1])
         dataset_generator.update_pool(state_grid_indices, final_training_grid)
+        print(f"final_training_grid min: {jnp.min(final_training_grid)}")
+        print(f"final_training_grid max: {jnp.max(final_training_grid)}")
         print(f"state_grid_indices: {state_grid_indices}")
         print(f"Step : {step}, loss : {loss}")
 
