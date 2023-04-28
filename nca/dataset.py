@@ -32,7 +32,7 @@ class NCADataGenerator:
         self.pool = np.asarray([self.seed_state] * self.pool_size)
 
     def sample(
-        self, key: Any, damage: bool = False, K: int = 5
+        self, key: Any, damage: bool = False, K: int = 1
     ) -> Tuple[jax.Array, jax.Array]:
         # sample a batch of random indices from the pool
         indices = jax.random.randint(
@@ -51,7 +51,7 @@ class NCADataGenerator:
             )
             ids_to_damage = np.asarray(ids_to_damage)
             samples_to_damage = pool_sample[ids_to_damage]  # [np.newaxis, ...]
-            samples_to_damage = NCADataGenerator.random_cutout(samples_to_damage)
+            samples_to_damage = NCADataGenerator.random_cutout_circle(samples_to_damage)
 
             pool_sample[ids_to_damage] = samples_to_damage
 
@@ -92,7 +92,7 @@ class NCADataGenerator:
         return jnp.asarray(target)
 
     @staticmethod
-    def random_cutout(img_nchw, min_size=(4, 4), max_size=(32, 32)):
+    def random_cutout_rect(img_nchw, min_size=(4, 4), max_size=(32, 32)):
         rand_h = tf.random.uniform(
             shape=[], minval=min_size[0], maxval=max_size[0], dtype=tf.int32
         )
@@ -112,6 +112,23 @@ class NCADataGenerator:
         img_nchw = NHWC_to_NCHW(img_nhwc)
 
         return img_nchw
+
+    @staticmethod
+    def random_cutout_circle(img_nchw):
+        img_nhwc = NCHW_to_NHWC(img_nchw)
+
+        n, h, w, _ = img_nhwc.shape
+
+        x = tf.linspace(-1.0, 1.0, w)[None, None, :]
+        y = tf.linspace(-1.0, 1.0, h)[None, :, None]
+        center = tf.random.uniform([2, n, 1, 1], -0.5, 0.5)
+        r = tf.random.uniform([n, 1, 1], 0.1, 0.4)
+        x, y = (x - center[0]) / r, (y - center[1]) / r
+        mask = tf.cast(x * x + y * y < 1.0, tf.float32)
+        img_masked = img_nhwc - mask[..., tf.newaxis]
+        img_masked = np.asarray(img_masked)
+        img_masked_nchw = NHWC_to_NCHW(img_masked)
+        return img_masked_nchw
 
     @staticmethod
     def random_rotate(img_nchw, min_angle=-np.pi, max_angle=np.pi):
