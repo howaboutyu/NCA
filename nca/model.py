@@ -1,10 +1,11 @@
 import jax.numpy as jnp
 import flax.linen as nn
+from typing import Callable
 
 
 class UpdateModel(nn.Module):
     model_output_len: int = 16
-    kernel_init: Callabe = nn.initializers.glorot_uniform
+    kernel_init: Callable = nn.initializers.glorot_uniform
 
     def setup(self):
         """Initialize the model layers."""
