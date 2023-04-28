@@ -4,14 +4,21 @@ import flax.linen as nn
 
 class UpdateModel(nn.Module):
     model_output_len: int = 16
+    kernel_init: Callabe = nn.initializers.glorot_uniform
 
     def setup(self):
         """Initialize the model layers."""
-        self.dense1 = nn.Dense(128, kernel_init=nn.initializers.lecun_normal())
-        self.dense2 = nn.Dense(128, kernel_init=nn.initializers.lecun_normal())
-
-        self.dense_final = nn.Dense(
-            self.model_output_len, kernel_init=nn.initializers.zeros
+        self.conv_1 = nn.Conv(
+            128,
+            kernel_size=(1, 1),
+            padding="SAME",
+            kernel_init=self.kernel_init(),
+        )
+        self.conv_2 = nn.Conv(
+            self.model_output_len,
+            kernel_size=(1, 1),
+            padding="SAME",
+            kernel_init=nn.initializers.zeros,
         )
 
     def __call__(self, perception_vector: jnp.ndarray) -> jnp.ndarray:
@@ -23,9 +30,8 @@ class UpdateModel(nn.Module):
         Returns:
             A 2D tensor representing the output data with shape (batch_size, output_len).
         """
-        x = self.dense1(perception_vector)
+
+        x = self.conv_1(perception_vector)
         x = nn.relu(x)
-        x = self.dense2(x)
-        x = nn.relu(x)
-        ds = self.dense_final(x)
+        ds = self.conv_2(x)
         return ds
