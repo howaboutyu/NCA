@@ -4,6 +4,7 @@ from context import *
 from nca.dataset import NCADataGenerator
 import jax
 import numpy as np
+from nca.utils import NCHW_to_NHWC, NHWC_to_NCHW
 
 
 @pytest.fixture
@@ -38,3 +39,13 @@ def test_update_pool(generator):
 def test_get_target(generator):
     target = generator.get_target("emoji_imgs/skier.png")
     assert target.shape == (32, 4, 40, 40)
+
+
+def test_random_cutout(generator):
+    # random data
+    data_nhwc = np.zeros((generator.batch_size,) + generator.dimensions + (3,))
+    data_nchw = NHWC_to_NCHW(data_nhwc)
+
+    masked_data = generator.random_cutout_circle(data_nchw)
+
+    assert masked_data.shape == data_nchw.shape
