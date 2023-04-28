@@ -31,6 +31,7 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
 
     # Create an Adam optimizer with the learning rate schedule
     optimizer = optax.chain(
+        optax.clip(1.0),
         optax.adam(learning_rate=learning_rate_schedule),
     )
 
@@ -150,7 +151,9 @@ def train_step(
     (loss, state_grid_sequence), grad = grad_fn(state.params, state_grid, key)
 
     if apply_grad:
-        grad = jax.tree_map(lambda g: g / (jnp.linalg.norm(g) + 1e-8), grad)
+        grad = jax.tree_map(
+            lambda g: jnp.nan_to_num(g / (jnp.linalg.norm(g) + 1e-8)), grad
+        )
         state = state.apply_gradients(grads=grad)
 
     return state, loss, state_grid_sequence
