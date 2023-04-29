@@ -2,11 +2,11 @@
 
 weights_dir: 'ckpts/damage_ckpt'
 checkpoint_dir: 'ckpts/damage_ckpt'
-pool_size: 1000
+pool_size: 1024 
 target_filename: "emoji_imgs/smile.png"
-damage: False # TODO: No longer works with current train.py 
+n_damage: 3
 learning_rate: 0.003
-total_training_steps: 50000
+total_training_steps: 20000
 batch_size: 8
 num_nca_steps: 48
 log_every: 100
