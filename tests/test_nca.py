@@ -1,14 +1,14 @@
 import pytest
 import numpy as np
 from jax import random
-import cv2  # type: ignore
+import cv2
 
 from context import *
 from nca.nca import *
 from nca.model import UpdateModel
 
 
-def test_create_perception_kernel():
+def test_perception_kernel_creation():
     kernel_x, kernel_y = create_perception_kernel(
         input_size=64, output_size=8, use_oihw_layout=True
     )
@@ -22,7 +22,7 @@ def test_create_perception_kernel():
     assert kernel_y.shape == (1, 1, 3, 3)
 
 
-def test_perceive():
+def test_perception_function():
     # Set up random input data
     key = random.PRNGKey(0)
     input_shape = (1, 16, 32, 32)
@@ -36,15 +36,15 @@ def test_perceive():
     assert y.shape == (1, 16 * 3, 32, 32)
 
 
-def test_update():
+def test_cell_update_function():
     # Set up random input data
-    key = jax.random.PRNGKey(0)
+    key = random.PRNGKey(0)
     input_shape = (4, 16, 32, 32)
-    x = jax.random.normal(key, input_shape)
+    x = random.normal(key, input_shape)
 
     # Initialize the model and its parameters
     model = UpdateModel()
-    rand_data = jax.random.normal(key, (1, 32, 32, 16 * 3))
+    rand_data = random.normal(key, (1, 32, 32, 16 * 3))
     params = model.init(key, rand_data)
 
     # Create the perception kernel
