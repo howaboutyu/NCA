@@ -92,7 +92,7 @@ class NCADataGenerator:
         return jnp.asarray(target)
 
     @staticmethod
-    def random_cutout_rect(img_nchw, min_size=(4, 4), max_size=(32, 32)):
+    def random_cutout_rect(img_nchw: Array, min_size=(4, 4), max_size=(32, 32)):
         rand_h = tf.random.uniform(
             shape=[], minval=min_size[0], maxval=max_size[0], dtype=tf.int32
         )
@@ -114,15 +114,15 @@ class NCADataGenerator:
         return img_nchw
 
     @staticmethod
-    def random_cutout_circle(img_nchw, key):
+    def random_cutout_circle(img_nchw: Array, seed: int):
         img_nhwc = NCHW_to_NHWC(img_nchw)
 
         n, h, w, _ = img_nhwc.shape
 
         x = tf.linspace(-1.0, 1.0, w)[None, None, :]
         y = tf.linspace(-1.0, 1.0, h)[None, :, None]
-        center = tf.random.uniform([2, n, 1, 1], -0.5, 0.5, seed=key)
-        r = tf.random.uniform([n, 1, 1], 0.1, 0.3, seed=key)
+        center = tf.random.uniform([2, n, 1, 1], -0.5, 0.5, seed=seed)
+        r = tf.random.uniform([n, 1, 1], 0.1, 0.3, seed=seed)
         x, y = (x - center[0]) / r, (y - center[1]) / r
         mask = tf.cast(x * x + y * y < 1.0, tf.float32)
         img_masked = img_nhwc * (1.0 - mask[..., tf.newaxis])
