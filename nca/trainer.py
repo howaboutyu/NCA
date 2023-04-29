@@ -3,6 +3,8 @@ import jax.numpy as jnp
 
 
 from flax.training import checkpoints, train_state
+from flax import core
+
 import optax  # type: ignore
 from dataclasses import dataclass
 import cv2  # type: ignore
@@ -20,7 +22,9 @@ from nca.config import NCAConfig
 from nca.dataset import NCADataGenerator
 from nca.utils import make_video, NCHW_to_NHWC, NCHW_to_NHWC, mse
 
+# define some types
 Array = Any
+FrozenDict = core.FrozenDict[str, Any]
 
 
 def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
@@ -31,24 +35,36 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
 
     # Create an Adam optimizer with the learning rate schedule
     optimizer = optax.chain(
-        optax.clip(1.0),
+        optax.clip(0.5),
         optax.adam(learning_rate=learning_rate_schedule),
     )
 
     # Initialize the model with random weights
     model = UpdateModel(model_output_len=config.model_output_len)
-    initial_params = jax.random.normal(
+    dummy_data = jax.random.normal(
         jax.random.PRNGKey(0),
         (1, config.dimensions[0], config.dimensions[1], config.model_output_len * 3),
     )
-    initial_state = model.init(jax.random.PRNGKey(0), initial_params)
+
+    if config.weights_dir:
+        restored_dict = checkpoints.restore_checkpoint(config.weights_dir, target=None)
+
+    if restored_dict == None:
+        params = model.init(jax.random.PRNGKey(0), dummy_data)
+        print("Initializing params from scratch")
+    else:
+        print(f"Loading params from ckpt {config.weights_dir}")
+        params = restored_dict["params"]
 
     # Create a TrainState object to hold the model state and optimizer state
     state = train_state.TrainState.create(
         apply_fn=model,
-        params=initial_state,
+        params=params,
         tx=optimizer,
     )
+
+    if config.checkpoint_dir:
+        state = checkpoints.restore_checkpoint(config.checkpoint_dir, target=state)
 
     # Return the TrainState object and the learning rate schedule
     return state, learning_rate_schedule
@@ -204,9 +220,6 @@ def train_and_evaluate(config: NCAConfig):
 
     state, learning_rate_schedule = create_state(config)
 
-    if config.weights_dir:
-        state = checkpoints.restore_checkpoint(config.weights_dir, state)
-
     cell_update_fn = create_cell_update_fn(config, state.apply_fn, use_jit=False)
 
     dataset_generator = NCADataGenerator(
@@ -256,6 +269,13 @@ def train_and_evaluate(config: NCAConfig):
             state_grids_ranked[-config.n_damage :], int(key[0])  # type: ignore
         )
 
+        # shuffle
+        shuffled_idx = jax.random.permutation(
+            key, jnp.arange(state_grids_ranked.shape[0])
+        )
+        shuffled_idx = np.asarray(shuffled_idx)
+        state_grids_ranked = state_grids_ranked[shuffled_idx]
+
         (
             state,
             loss,
@@ -270,8 +290,8 @@ def train_and_evaluate(config: NCAConfig):
         # replace the pool with final state grid
         final_training_grid = np.squeeze(training_grid_array[-1])
         dataset_generator.update_pool(state_grid_indices, final_training_grid)
-        print(f"final_training_grid min: {jnp.min(final_training_grid)}")
-        print(f"final_training_grid max: {jnp.max(final_training_grid)}")
+        print(f"training_grid_array min: {jnp.min(training_grid_array)}")
+        print(f"training_grid_array max: {jnp.max(training_grid_array)}")
         print(f"state_grid_indices: {state_grid_indices}")
         print(f"Step : {step}, loss : {loss}")
 
