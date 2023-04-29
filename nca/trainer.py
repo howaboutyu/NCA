@@ -238,24 +238,23 @@ def train_and_evaluate(config: NCAConfig):
         # get the training data
         state_grids, state_grid_indices = dataset_generator.sample(key, damage=False)
 
-        # TODO start
-        # * move computing batch_id_worst to dataset generator
-        # * combine setting seed_state and damage to a function in dataset_generator
-
-        loss_non_reduced = mse(state_grids[:, :4], train_target, reduce_mean=False)
-        loss_per_batch = jnp.mean(loss_non_reduced, axis=(1, 2, 3))
-
-        # get the batch_id with the maximum loss
-        batch_id_worst = jnp.argmax(loss_per_batch)
-        batch_id_best = jnp.argmin(loss_per_batch)
-        state_grids[batch_id_worst] = dataset_generator.seed_state
-
-        sample_to_damage = state_grids[batch_id_best][np.newaxis, ...]
-        sample_to_damage = NCADataGenerator.random_cutout_circle(
-            sample_to_damage, key[0]
+        loss_non_reduced_np = np.asarray(
+            mse(state_grids[:, :4], train_target, reduce_mean=False)
         )
-        state_grids[batch_id_best] = sample_to_damage[0].astype(np.float32)
-        # TODO end
+        loss_per_batch_np = np.mean(loss_non_reduced_np, axis=(1, 2, 3))
+
+        loss_rank = np.argsort(loss_per_batch_np)[::-1]
+
+        # Rank from highest to lowest loss
+        state_grids_ranked = state_grids[loss_rank]
+
+        # set the worst performing batch to the seed state
+        state_grids_ranked[:1] = dataset_generator.seed_state
+
+        # replace best performing states (config.n_damage) grids with random cutouts
+        state_grids_ranked[-config.n_damage :] = NCADataGenerator.random_cutout_circle(
+            state_grids_ranked[-config.n_damage :], int(key[0])  # type: ignore
+        )
 
         (
             state,
@@ -264,7 +263,7 @@ def train_and_evaluate(config: NCAConfig):
         ) = train_step_jit(
             key,
             state,
-            state_grids,
+            state_grids_ranked,
             train_target,
         )
 
@@ -379,22 +378,21 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
         state_grid = state_grid_array[-1]
         state_grid_cache.append(jnp.squeeze(state_grid_array))
 
-        state_grid = NCADataGenerator.random_cutout(state_grid, max_size=(16, 16))
-        state_grid = NCADataGenerator.random_cutout(state_grid, max_size=(16, 16))
+        state_grid = NCADataGenerator.random_cutout_rect(state_grid, max_size=(16, 16))
+        state_grid = NCADataGenerator.random_cutout_rect(state_grid, max_size=(16, 16))
 
     state_grid_cache = jnp.array(state_grid_cache)  # type: ignore
 
     state_grid_cache = jnp.concatenate(state_grid_cache, axis=0)
-    state_grid_cache = jnp.clip(state_grid_cache, 0.0, 1.0)
-
     # save the entire state_grid_cache as npy.
     # TODO: add path to config.
     np.save("/tmp/state_grid_cache.npy", state_grid_cache)
 
+    state_grid_cache = jnp.clip(state_grid_cache, 0.0, 1.0)
+
     rgba = np.asarray(state_grid_cache)[:, 0:4]
 
     rgb = rgba[:, :3] * rgba[:, 3:4]
-
     # NCHW -> NHWC
     rgb = jnp.transpose(rgb, (0, 2, 3, 1))
 
@@ -402,8 +400,6 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
     rgb = tf.image.resize(
         rgb, (256, 256), method=tf.image.ResizeMethod.NEAREST_NEIGHBOR
     ).numpy()
-
-    rgb = (rgb * 255).astype(np.uint8)
 
     if output_video_path is None:
         make_video(rgb, config.evaluation_video_file)
