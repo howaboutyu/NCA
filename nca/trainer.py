@@ -404,10 +404,7 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
         # state_grid = np.asarray(state_grid).copy()
         # state_grid[:, : ,  : , :state_grid.shape[2]//2] = 0.0
 
-        # 2) make a random rectange cutouts, 2 times
-        state_grid = NCADataGenerator.random_cutout_rect(
-            state_grid, max_size=(16, 16), seed=int(key[0])  # type: ignore
-        )
+        # 2) make a random rectange cutouts
         state_grid = NCADataGenerator.random_cutout_rect(
             state_grid, max_size=(16, 16), seed=int(key[0])  # type: ignore
         )
