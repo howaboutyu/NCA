@@ -119,7 +119,9 @@ def make_video(
 
 
 def mse(
-    pred_rgb: jnp.ndarray, target: jnp.ndarray, reduce_mean: bool = True
+    pred_rgb: Union[jnp.ndarray, np.ndarray],
+    target: Union[jnp.ndarray, np.ndarray],
+    reduce_mean: bool = True,
 ) -> jnp.ndarray:
     if reduce_mean == True:
         loss_value = jnp.mean(jnp.square(pred_rgb - target))
