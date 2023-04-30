@@ -125,7 +125,7 @@ class NCADataGenerator:
         r = tf.random.uniform([n, 1, 1], 0.1, 0.4, seed=seed)
         x, y = (x - center[0]) / r, (y - center[1]) / r
         mask = tf.cast(x * x + y * y < 1.0, tf.float32)
-        img_masked = img_nhwc * (1.0 - 0.5 * mask[..., tf.newaxis])
+        img_masked = img_nhwc * (1.0 - mask[..., tf.newaxis])
         img_masked = np.asarray(img_masked)
         img_masked_nchw = NHWC_to_NCHW(img_masked)
         return img_masked_nchw
