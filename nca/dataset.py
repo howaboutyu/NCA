@@ -33,29 +33,14 @@ class NCADataGenerator:
 
     def sample(
         self, key: Any, damage: bool = False, K: int = 1
-    ) -> Tuple[jax.Array, jax.Array]:
+    ) -> Tuple[np.ndarray, np.ndarray]:
         # sample a batch of random indices from the pool
         indices = jax.random.randint(
             key, shape=(self.batch_size,), minval=0, maxval=self.pool_size
         )
-        indices = np.asarray(indices)
+        indices_np = np.asarray(indices)
 
-        if damage == False:
-            return self.pool[indices], indices
-        else:
-            # damage K sample
-            pool_sample = self.pool[indices]
-
-            ids_to_damage = jax.random.randint(
-                key, shape=(K,), minval=0, maxval=len(indices)
-            )
-            ids_to_damage = np.asarray(ids_to_damage)
-            samples_to_damage = pool_sample[ids_to_damage]  # [np.newaxis, ...]
-            samples_to_damage = NCADataGenerator.random_cutout_circle(samples_to_damage)
-
-            pool_sample[ids_to_damage] = samples_to_damage
-
-            return pool_sample, indices
+        return self.pool[indices_np], indices_np
 
     def update_pool(self, indices: Any, new_states: np.ndarray):
         self.pool[indices] = new_states
@@ -92,7 +77,12 @@ class NCADataGenerator:
         return jnp.asarray(target)
 
     @staticmethod
-    def random_cutout_rect(img_nchw: Array, min_size=(4, 4), max_size=(32, 32)):
+    def random_cutout_rect(
+        img_nchw: Array,
+        min_size: tuple = (4, 4),
+        max_size: tuple = (32, 32),
+        seed: int = 10,
+    ):
         rand_h = tf.random.uniform(
             shape=[], minval=min_size[0], maxval=max_size[0], dtype=tf.int32
         )
@@ -106,7 +96,7 @@ class NCADataGenerator:
 
         img_nhwc = NCHW_to_NHWC(img_nchw)
         img_nhwc = tfa.image.random_cutout(
-            img_nhwc, mask_size=(rand_h, rand_w), constant_values=0
+            img_nhwc, mask_size=(rand_h, rand_w), constant_values=0.0, seed=seed
         ).numpy()
 
         img_nchw = NHWC_to_NCHW(img_nhwc)
