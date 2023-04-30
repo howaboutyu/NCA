@@ -398,14 +398,23 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
         state_grid = state_grid_array[-1]
         state_grid_cache.append(jnp.squeeze(state_grid_array))
 
-        state_grid = NCADataGenerator.random_cutout_rect(state_grid, max_size=(16, 16))
-        state_grid = NCADataGenerator.random_cutout_rect(state_grid, max_size=(16, 16))
+        state_grid = NCADataGenerator.random_cutout_rect(
+            state_grid, max_size=(16, 16), seed=int(key[0]) # type: ignore
+        )
+        state_grid = NCADataGenerator.random_cutout_rect(
+            state_grid, max_size=(16, 16), seed=int(key[0]) # type: ignore
+        )
+
+        # state_grid = NCADataGenerator.random_cutout_circle(state_grid, key[0])
+
+        key, _ = jax.random.split(key)
 
     state_grid_cache = jnp.array(state_grid_cache)  # type: ignore
 
     state_grid_cache = jnp.concatenate(state_grid_cache, axis=0)
     # save the entire state_grid_cache as npy.
     # TODO: add path to config.
+
     np.save("/tmp/state_grid_cache.npy", state_grid_cache)
 
     state_grid_cache = jnp.clip(state_grid_cache, 0.0, 1.0)
