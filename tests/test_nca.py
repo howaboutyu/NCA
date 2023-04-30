@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 from jax import random
-import cv2
+import cv2  # type: ignore
 
 from context import *
 from nca.nca import *
