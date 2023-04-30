@@ -398,14 +398,19 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
         state_grid = state_grid_array[-1]
         state_grid_cache.append(jnp.squeeze(state_grid_array))
 
-        state_grid = NCADataGenerator.random_cutout_rect(
-            state_grid, max_size=(16, 16), seed=int(key[0]) # type: ignore
-        )
-        state_grid = NCADataGenerator.random_cutout_rect(
-            state_grid, max_size=(16, 16), seed=int(key[0]) # type: ignore
-        )
+        ###  Some cutout strategies ###
+        # 1) split the grid into two and make one half black
+        #
+        # state_grid = np.asarray(state_grid).copy()
+        # state_grid[:, : ,  : , :state_grid.shape[2]//2] = 0.0
 
-        # state_grid = NCADataGenerator.random_cutout_circle(state_grid, key[0])
+        # 2) make a random rectange cutouts, 2 times
+        state_grid = NCADataGenerator.random_cutout_rect(
+            state_grid, max_size=(16, 16), seed=int(key[0])  # type: ignore
+        )
+        state_grid = NCADataGenerator.random_cutout_rect(
+            state_grid, max_size=(16, 16), seed=int(key[0])  # type: ignore
+        )
 
         key, _ = jax.random.split(key)
 
