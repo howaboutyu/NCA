@@ -1,14 +1,15 @@
 # This is for replicating https://distill.pub/2020/growing-ca/
 
-weights_dir: 'ckpts/damage_ckpt'
+#weights_dir: '33'
+weights_dir: 'damaged_smile/damage_ckpt/'
 checkpoint_dir: 'ckpts/damage_ckpt'
-pool_size: 1000
+pool_size: 1024 
 target_filename: "emoji_imgs/smile.png"
-damage: False # TODO: No longer works with current train.py 
-learning_rate: 0.003
-total_training_steps: 50000
-batch_size: 8
-num_nca_steps: 48
-log_every: 100
+n_damage: 1
+learning_rate: 0.0001
+total_training_steps: 100000
+batch_size: 4
+num_nca_steps: 120
+log_every: 200
 
 

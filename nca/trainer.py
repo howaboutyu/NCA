@@ -3,6 +3,8 @@ import jax.numpy as jnp
 
 
 from flax.training import checkpoints, train_state
+from flax import core
+
 import optax  # type: ignore
 from dataclasses import dataclass
 import cv2  # type: ignore
@@ -20,7 +22,9 @@ from nca.config import NCAConfig
 from nca.dataset import NCADataGenerator
 from nca.utils import make_video, NCHW_to_NHWC, NCHW_to_NHWC, mse
 
+# define some types
 Array = Any
+FrozenDict = core.FrozenDict[str, Any]
 
 
 def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
@@ -31,24 +35,36 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
 
     # Create an Adam optimizer with the learning rate schedule
     optimizer = optax.chain(
-        optax.clip(1.0),
+        optax.clip(0.5),
         optax.adam(learning_rate=learning_rate_schedule),
     )
 
     # Initialize the model with random weights
     model = UpdateModel(model_output_len=config.model_output_len)
-    initial_params = jax.random.normal(
+    dummy_data = jax.random.normal(
         jax.random.PRNGKey(0),
         (1, config.dimensions[0], config.dimensions[1], config.model_output_len * 3),
     )
-    initial_state = model.init(jax.random.PRNGKey(0), initial_params)
+
+    if config.weights_dir:
+        restored_dict = checkpoints.restore_checkpoint(config.weights_dir, target=None)
+
+    if restored_dict == None:
+        params = model.init(jax.random.PRNGKey(0), dummy_data)
+        print("Initializing params from scratch")
+    else:
+        print(f"Loading params from ckpt {config.weights_dir}")
+        params = restored_dict["params"]
 
     # Create a TrainState object to hold the model state and optimizer state
     state = train_state.TrainState.create(
         apply_fn=model,
-        params=initial_state,
+        params=params,
         tx=optimizer,
     )
+
+    if config.checkpoint_dir:
+        state = checkpoints.restore_checkpoint(config.checkpoint_dir, target=state)
 
     # Return the TrainState object and the learning rate schedule
     return state, learning_rate_schedule
@@ -204,9 +220,6 @@ def train_and_evaluate(config: NCAConfig):
 
     state, learning_rate_schedule = create_state(config)
 
-    if config.weights_dir:
-        state = checkpoints.restore_checkpoint(config.weights_dir, state)
-
     cell_update_fn = create_cell_update_fn(config, state.apply_fn, use_jit=False)
 
     dataset_generator = NCADataGenerator(
@@ -238,24 +251,30 @@ def train_and_evaluate(config: NCAConfig):
         # get the training data
         state_grids, state_grid_indices = dataset_generator.sample(key, damage=False)
 
-        # TODO start
-        # * move computing batch_id_worst to dataset generator
-        # * combine setting seed_state and damage to a function in dataset_generator
-
-        loss_non_reduced = mse(state_grids[:, :4], train_target, reduce_mean=False)
-        loss_per_batch = jnp.mean(loss_non_reduced, axis=(1, 2, 3))
-
-        # get the batch_id with the maximum loss
-        batch_id_worst = jnp.argmax(loss_per_batch)
-        batch_id_best = jnp.argmin(loss_per_batch)
-        state_grids[batch_id_worst] = dataset_generator.seed_state
-
-        sample_to_damage = state_grids[batch_id_best][np.newaxis, ...]
-        sample_to_damage = NCADataGenerator.random_cutout_circle(
-            sample_to_damage, key[0]
+        loss_non_reduced_np = np.asarray(
+            mse(state_grids[:, :4], train_target, reduce_mean=False)
         )
-        state_grids[batch_id_best] = sample_to_damage[0].astype(np.float32)
-        # TODO end
+        loss_per_batch_np = np.mean(loss_non_reduced_np, axis=(1, 2, 3))
+
+        loss_rank = np.argsort(loss_per_batch_np)[::-1]
+
+        # Rank from highest to lowest loss
+        state_grids_ranked = state_grids[loss_rank]
+
+        # set the worst performing batch to the seed state
+        state_grids_ranked[:1] = dataset_generator.seed_state
+
+        # replace best performing states (config.n_damage) grids with random cutouts
+        state_grids_ranked[-config.n_damage :] = NCADataGenerator.random_cutout_circle(
+            state_grids_ranked[-config.n_damage :], int(key[0])  # type: ignore
+        )
+
+        # shuffle
+        shuffled_idx = jax.random.permutation(
+            key, jnp.arange(state_grids_ranked.shape[0])
+        )
+        shuffled_idx = np.asarray(shuffled_idx)
+        state_grids_ranked = state_grids_ranked[shuffled_idx]
 
         (
             state,
@@ -264,15 +283,15 @@ def train_and_evaluate(config: NCAConfig):
         ) = train_step_jit(
             key,
             state,
-            state_grids,
+            state_grids_ranked,
             train_target,
         )
 
         # replace the pool with final state grid
         final_training_grid = np.squeeze(training_grid_array[-1])
         dataset_generator.update_pool(state_grid_indices, final_training_grid)
-        print(f"final_training_grid min: {jnp.min(final_training_grid)}")
-        print(f"final_training_grid max: {jnp.max(final_training_grid)}")
+        print(f"training_grid_array min: {jnp.min(training_grid_array)}")
+        print(f"training_grid_array max: {jnp.max(training_grid_array)}")
         print(f"state_grid_indices: {state_grid_indices}")
         print(f"Step : {step}, loss : {loss}")
 
@@ -379,22 +398,32 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
         state_grid = state_grid_array[-1]
         state_grid_cache.append(jnp.squeeze(state_grid_array))
 
-        state_grid = NCADataGenerator.random_cutout(state_grid, max_size=(16, 16))
-        state_grid = NCADataGenerator.random_cutout(state_grid, max_size=(16, 16))
+        ###  Some cutout strategies ###
+        # 1) split the grid into two and make one half black
+        #
+        # state_grid = np.asarray(state_grid).copy()
+        # state_grid[:, : ,  : , :state_grid.shape[2]//2] = 0.0
+
+        # 2) make a random rectange cutouts
+        state_grid = NCADataGenerator.random_cutout_rect(
+            state_grid, max_size=(16, 16), seed=int(key[0])  # type: ignore
+        )
+
+        key, _ = jax.random.split(key)
 
     state_grid_cache = jnp.array(state_grid_cache)  # type: ignore
 
     state_grid_cache = jnp.concatenate(state_grid_cache, axis=0)
-    state_grid_cache = jnp.clip(state_grid_cache, 0.0, 1.0)
-
     # save the entire state_grid_cache as npy.
     # TODO: add path to config.
+
     np.save("/tmp/state_grid_cache.npy", state_grid_cache)
+
+    state_grid_cache = jnp.clip(state_grid_cache, 0.0, 1.0)
 
     rgba = np.asarray(state_grid_cache)[:, 0:4]
 
     rgb = rgba[:, :3] * rgba[:, 3:4]
-
     # NCHW -> NHWC
     rgb = jnp.transpose(rgb, (0, 2, 3, 1))
 
@@ -402,8 +431,6 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
     rgb = tf.image.resize(
         rgb, (256, 256), method=tf.image.ResizeMethod.NEAREST_NEIGHBOR
     ).numpy()
-
-    rgb = (rgb * 255).astype(np.uint8)
 
     if output_video_path is None:
         make_video(rgb, config.evaluation_video_file)

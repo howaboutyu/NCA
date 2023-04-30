@@ -19,7 +19,7 @@ class NCAConfig:
     log_dir: str = "logs"
     log_every: int = 500
     num_nca_steps: int = 64  # number of steps to run NCA for
-    damage: bool = False  # whether to damage the target during training
+    n_damage: int = 3  # number of states in a batch to damage
 
     # evaluation parameters
     total_eval_steps: int = 300

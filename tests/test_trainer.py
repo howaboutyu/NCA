@@ -33,7 +33,7 @@ def dummy_config():
         eval_every=1,
         checkpoint_dir="/tmp/test_ckpt",
         checkpoint_every=1,
-        validation_video_dir="/tmp/test_vid",
+        evaluation_video_file="/tmp/test_vid.mp4",
     )
 
 
@@ -50,40 +50,18 @@ def test_create_state(dummy_config):
     assert isinstance(state.tx, optax.GradientTransformation)
 
 
-def test_cell_update_fn(dummy_config):
+def test_training_step(dummy_config, dummy_state):
     key = jax.random.PRNGKey(0)
-    state_grid = jnp.zeros(
-        (1,) + dummy_config.dimensions + (dummy_config.model_output_len,)
-    )
-    state_grid = NHWC_to_NCHW(state_grid)
-    model = UpdateModel(model_output_len=dummy_config.model_output_len)
 
-    cell_update_fn = create_cell_update_fn(dummy_config, model)
-
-    params = model.init(
-        key,
-        jax.random.normal(
-            key,
-            (1,) + dummy_config.dimensions + (dummy_config.model_output_len * 3,),
-        ),
-    )
-
-    new_state_grid = cell_update_fn(key, state_grid, params)
-    new_state_grid = NCHW_to_NHWC(new_state_grid)
-
-    assert new_state_grid.shape == (1,) + dummy_config.dimensions + (
-        dummy_config.model_output_len,
-    )
-
-
-def test_train_step(dummy_config, dummy_state):
-    key = jax.random.PRNGKey(0)
-    state_grid = jnp.zeros(
+    state_grid_shape = (
         (dummy_config.batch_size,)
         + dummy_config.dimensions
         + (dummy_config.model_output_len,)
     )
-    target = jnp.zeros((dummy_config.batch_size,) + dummy_config.dimensions + (4,))
+    target_shape = (dummy_config.batch_size,) + dummy_config.dimensions + (4,)
+
+    state_grid = jnp.zeros(state_grid_shape)
+    target = jnp.zeros(target_shape)
 
     cell_update_fn = create_cell_update_fn(dummy_config, dummy_state.apply_fn)
 
@@ -100,6 +78,7 @@ def test_train_step(dummy_config, dummy_state):
     )
 
     assert loss.shape == ()
+    assert isinstance(state, train_state.TrainState)
 
 
 def test_eval_step(dummy_config, dummy_state):
@@ -127,18 +106,18 @@ def test_eval_step(dummy_config, dummy_state):
     assert loss.shape == ()
 
 
-def test_train_and_evaluate(dummy_config):
+def test_training_and_evaluation(dummy_config):
     print("Starting train_and_evaluate test")
     train_and_evaluate(dummy_config)
     print("Finished train_and_evaluate test")
 
-    # check if the checkpoint was saved
-    os.path.exists(dummy_config.checkpoint_dir)
+    # Check if the checkpoint was saved
+    assert os.path.exists(dummy_config.checkpoint_dir)
 
-    # check if video was saved
-    os.path.exists(dummy_config.validation_video_dir)
+    # Check if the video was saved
+    assert os.path.exists(dummy_config.validation_video_dir)
 
-    # rm testing dirs
+    # Remove testing directories
     os.system(f"rm -rf {dummy_config.checkpoint_dir}")
     os.system(f"rm -rf {dummy_config.validation_video_dir}")
 
@@ -146,6 +125,8 @@ def test_train_and_evaluate(dummy_config):
 def test_evaluation(dummy_config):
     evaluate(dummy_config)
 
-    os.path.exists(dummy_config.validation_video_dir)
+    # Check if the video was saved
+    assert os.path.exists(dummy_config.evaluation_video_file)
 
-    os.system(f"rm -rf {dummy_config.validation_video_dir}")
+    # Remove testing directory
+    os.system(f"rm -rf {dummy_config.evaluation_video_file}")
