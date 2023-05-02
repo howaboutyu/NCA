@@ -11,6 +11,7 @@ class NCAConfig:
     eval_every: int = 500
     learning_rate: float = 2e-4
     pool_size: int = 1000
+    stochastic_update_prob: float = 0.5
     target_filename: str = "emoji_imgs/skier.png"
     weights_dir: str = "checkpoints"  # where to load ckpt
     checkpoint_dir: str = "checkpoints"  # where to save ckpt

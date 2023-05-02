@@ -92,7 +92,7 @@ def create_cell_update_fn(
             model_fn=model_fn,
             kernel_x=kernel_x,
             kernel_y=kernel_y,
-            update_prob=0.5,
+            update_prob=config.stochastic_update_prob,
         )
 
     # if we want to use jit, then jit the cell_update_fn function
