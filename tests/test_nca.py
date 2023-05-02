@@ -1,11 +1,10 @@
 import pytest
 import numpy as np
 from jax import random
-import cv2  # type: ignore
 
 from context import *
 from nca.nca import *
-from nca.model import UpdateModel
+from nca.model import UpdateModel, PerceiveModel
 
 
 def test_perception_kernel_creation():
@@ -34,6 +33,18 @@ def test_perception_function():
     y = perceive(x, kernel_x, kernel_y)
 
     assert y.shape == (1, 16 * 3, 32, 32)
+
+
+def test_perception_model():
+    key = random.PRNGKey(0)
+    input_shape = (1, 32, 32, 16)
+
+    p_model = PerceiveModel()
+    params = p_model.init(key, random.normal(key, input_shape))
+
+    y = p_model.apply(params, random.normal(key, input_shape))
+
+    assert y.shape == (1, 32, 32, 16 * 3)
 
 
 def test_cell_update_function():
