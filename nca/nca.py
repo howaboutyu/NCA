@@ -5,6 +5,9 @@ import numpy as np
 from typing import Any, Callable, Optional, Tuple, Union
 
 
+from .model import UpdateModel, PerceiveModel
+
+
 def create_perception_kernel(
     input_size: int = 16, output_size: int = 16, use_oihw_layout: bool = True
 ) -> tuple:
@@ -77,11 +80,13 @@ def perceive(
 def cell_update(
     key: jax.Array,
     state_grid: jax.Array,
-    model_fn: Any,
-    params: jax.Array,
+    update_model_fn: UpdateModel,
+    params_update: jax.Array,
     kernel_x: jax.Array,
     kernel_y: jax.Array,
     update_prob: float = 0.5,
+    params_perceive: Optional[jax.Array] = None,
+    perceive_model_fn: Optional[PerceiveModel] = None,
 ) -> jnp.ndarray:
     """
     Cell update function to perform the update on the given state grid.
@@ -90,7 +95,8 @@ def cell_update(
         key: A JAX array representing the random key.
         state_grid: A JAX array representing the input state grid.
         model_fn: The model function to be applied to the perceived grid.
-        params: A JAX array representing the model parameters.
+        params_update: A JAX array representing the uipdate model parameters.
+        params_perceive: A JAX array representing the perceive model parameters.
         kernel_x: A JAX array representing the Sobel operator for
             edge detection in the x direction.
         kernel_y: A JAX array representing the Sobel operator for
@@ -100,14 +106,18 @@ def cell_update(
     Returns:
         A JAX array representing the updated state grid.
     """
+
     pre_alive_mask = alive_masking(state_grid[:, 3, :, :])
 
-    perceived_grid = perceive(state_grid, kernel_x, kernel_y)
+    if params_perceive is None:
+        perceived_grid = perceive(state_grid, kernel_x, kernel_y)
+    else:
+        perceived_grid = perceive_model_fn.apply(params_perceive, state_grid)  # type: ignore
 
     # Transpose: NCHW -> NHWC
     perceived_grid = jnp.transpose(perceived_grid, (0, 2, 3, 1))
 
-    ds = model_fn.apply(params, perceived_grid)
+    ds = update_model_fn.apply(params_update, perceived_grid)  # type: ignore
 
     # Stochastic update
     rand_mask = jax.random.uniform(key, shape=ds.shape[:-1]) < update_prob
