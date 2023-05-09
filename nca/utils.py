@@ -4,6 +4,7 @@ from moviepy.editor import ImageSequenceClip  # type: ignore
 import tempfile
 from glob import glob
 import cv2  # type: ignore
+import os
 
 from typing import List, Any, Union
 
@@ -129,3 +130,25 @@ def mse(
         loss_value = jnp.square(pred_rgb - target)
 
     return loss_value
+
+
+def download_pokemon_emoji(
+    output_dir: str = "data/pokemon_emoji",
+) -> dict:
+    git_url = "https://github.com/Templarian/slack-emoji-pokemon"
+
+    # download pokemon emoji
+    os.system(f"git clone {git_url} {output_dir}")
+
+    # emoji dir
+    emoji_dir = f"{output_dir}/emojis"
+
+    emoji_list = glob(f"{emoji_dir}/*.png")
+
+    emoji_dict = {}
+
+    for emoji in emoji_list:
+        emoji_name = emoji.split("/")[-1].split(".")[0]
+        emoji_dict[emoji_name] = emoji
+
+    return emoji_dict
