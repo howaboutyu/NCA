@@ -54,20 +54,20 @@ class NCADataGenerator:
             raise ValueError("Image must have 4 channels")
 
         # resize first 2xself.dimensions
-        img = cv2.resize(img, (2 * self.dimensions[0], 2 * self.dimensions[1]))
+        # img = cv2.resize(img, (2 * self.dimensions[0], 2 * self.dimensions[1]), interpolation=cv2.INTER_NEAREST)
 
         # Pad the image
-        pad_width = ((50, 50), (50, 50), (0, 0))
+        pad_width = ((25, 25), (25, 25), (0, 0))
         img = np.pad(img, pad_width, mode="constant", constant_values=0)
 
         # Resize the image to the target dimensions
-        img = cv2.resize(img, self.dimensions)
+        img = cv2.resize(img, self.dimensions, interpolation=cv2.INTER_NEAREST)
 
         # Convert image to float32
         img = img.astype(np.float32)
 
         # Apply alpha channel to color channels and normalize the color channels
-        alpha = img[..., -1] > 0
+        alpha = img[..., -1] > 1.0
         alpha = alpha.astype(np.float32)
         img[..., :3] = img[..., :3] * alpha[..., np.newaxis] / 255.0
         img[..., -1] = alpha
@@ -115,7 +115,7 @@ class NCADataGenerator:
         x = tf.linspace(-1.0, 1.0, w)[None, None, :]
         y = tf.linspace(-1.0, 1.0, h)[None, :, None]
         center = tf.random.uniform([2, n, 1, 1], -0.5, 0.5, seed=seed)
-        r = tf.random.uniform([n, 1, 1], 0.1, 0.4, seed=seed)
+        r = tf.random.uniform([n, 1, 1], 0.05, 0.2, seed=seed)
         x, y = (x - center[0]) / r, (y - center[1]) / r
         mask = tf.cast(x * x + y * y < 1.0, tf.float32)
         img_masked = img_nhwc * (1.0 - mask[..., tf.newaxis])
