@@ -53,7 +53,7 @@ class NCADataGenerator:
         if img is None or img.shape[2] != 4:
             raise ValueError("Image must have 4 channels")
 
-        # resize first 2xself.dimensions 
+        # resize first 2xself.dimensions
         img = cv2.resize(img, (2 * self.dimensions[0], 2 * self.dimensions[1]))
 
         # Pad the image
