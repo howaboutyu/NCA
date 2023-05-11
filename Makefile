@@ -43,3 +43,11 @@ start-devel:
 	    nca:latest \
 	    bash
 
+download-pokemon-data:
+	@if [ -d "slack-emoji-pokemon" ]; then \
+		echo "Pokemon emoji data already downloaded. Skipping..."; \
+	else \
+		echo "Downloading Pokemon emoji data..."; \
+		git clone https://github.com/Templarian/slack-emoji-pokemon; \
+		echo "Done! The emojis are located in slack-emoji-pokemon/emojis"; \
+	fi
