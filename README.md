@@ -1,4 +1,6 @@
-<h3 align="center">Project Title</h3>
+<!-- <h3 align="center">Project Title</h3> -->
+
+
 
 <div align="center">
 
@@ -12,6 +14,8 @@
 <p align="center"> A Jax implementation of Neural Cellular Automata 
     <br> 
 </p>
+
+![NCA](./gifs/output_half.mp4)
 
 ## 📝 Table of Contents
 
