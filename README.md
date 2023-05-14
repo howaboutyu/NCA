@@ -73,19 +73,39 @@ pytest
 
 ## 🎈 Usage <a name="usage"></a>
 
+### Training
+
 To train the model run the following command
 
 ```bash
 python main.py --config configs/growing_nca.yaml
 ``` 
 
-### Tensorboard logging
+#### Tensorboard logging
 
 In this project we use [TensorboardX](https://github.com/lanpa/tensorboardX) was used. It logs the train/val losses, the training NCA state propagation as a gif and also the NCA propagation from the seed state. To view the logs run the following command
 
 ```bash 
 tensorboard --logdir ./logs 
 ```
+
+### Inference
+
+To run inference on a trained model run the following command; we will demonstrate this on the pretrained model, you can download it using the command below
+
+```bash
+make download-pretrained
+```
+
+After downloading you can run the NCAs inference using the following command
+
+```bash
+python main.py --config_path=configs/growing_demo.yaml --mode=evaluate --output_video_path=demo.mp4
+2023
+```
+
+The NCA will start with the seed state and propagate for `num_nca_steps` steps defined in the configs.
+
 
 ## ⛏️ Built Using <a name = "built_using"></a>
 
