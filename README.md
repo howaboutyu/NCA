@@ -9,13 +9,15 @@
 
 </div>
 
+
 ---
 
 <p align="center"> A Jax implementation of Neural Cellular Automata 
     <br> 
+    <img src="./docs/gifs/output_half.gif" alt="NCA">
+
 </p>
 
-![NCA](./docs/gifs/output_half.gif)
 
 ## 📝 Table of Contents
 
