@@ -1,22 +1,15 @@
-<p align="center">
-  <a href="" rel="noopener">
- <img width=200px height=200px src="https://i.imgur.com/6wj0hh6.jpg" alt="Project logo"></a>
-</p>
-
 <h3 align="center">Project Title</h3>
 
 <div align="center">
 
-[![Status](https://img.shields.io/badge/status-active-success.svg)]()
-[![GitHub Issues](https://img.shields.io/github/issues/kylelobo/The-Documentation-Compendium.svg)](https://github.com/kylelobo/The-Documentation-Compendium/issues)
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/kylelobo/The-Documentation-Compendium.svg)](https://github.com/kylelobo/The-Documentation-Compendium/pulls)
+[![pytest](https://github.com/howaboutyu/NCA/actions/workflows/pytest.yml/badge.svg)](https://github.com/howaboutyu/NCA/actions/workflows/pytest.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](/LICENSE)
 
 </div>
 
 ---
 
-<p align="center"> Few lines describing your project.
+<p align="center"> A Jax implementation of Neural Cellular Automata 
     <br> 
 </p>
 
@@ -24,91 +17,78 @@
 
 - [About](#about)
 - [Getting Started](#getting_started)
-- [Deployment](#deployment)
 - [Usage](#usage)
 - [Built Using](#built_using)
 - [TODO](../TODO.md)
-- [Contributing](../CONTRIBUTING.md)
-- [Authors](#authors)
 - [Acknowledgments](#acknowledgement)
 
 ## 🧐 About <a name = "about"></a>
 
-Write about 1-2 paragraphs describing the purpose of your project.
+This project is a Jax implementation of Neural Cellular Automata (NCA) as described in [Growing Neural Cellular Automata](https://distill.pub/2020/growing-ca/). The original implementation is in [Tensorflow](https://colab.research.google.com/github/google-research/self-organising-systems/blob/master/notebooks/growing_ca.ipynb#scrollTo=4O4tzfe-GRJ7), and this project is a re-implementation in Jax. 
 
 ## 🏁 Getting Started <a name = "getting_started"></a>
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See [deployment](#deployment) for notes on how to deploy the project on a live system.
+These instructions will get you setup to train the model on your local machine.  
 
-### Prerequisites
 
-What things you need to install the software and how to install them.
-
-```
-Give examples
-```
 
 ### Installing
 
-A step by step series of examples that tell you how to get a development env running.
+#### Without docker 
 
-Say what the step will be
-
-```
-Give the example
-```
-
-And repeat
+Install the dependencies with pip
 
 ```
-until finished
+pip install -r requirements.txt
 ```
 
-End with an example of getting some data out of the system or using it for a little demo.
+To install Jax refer to the [Jax documentation](https://github.com/google/jax#installation)
 
-## 🔧 Running the tests <a name = "tests"></a>
+#### With GPU docker 
 
-Explain how to run the automated tests for this system.
+This docker is based on the [nvcr.io/nvidia/tensorflow:22.09-tf2-py](https://docs.nvidia.com/deeplearning/frameworks/tensorflow-release-notes/rel-22-09.html#rel-22-09) image. This image has CUDA 11.8 and cuDNN 8.6, ensure that you satisfy the [driver requirements](https://docs.nvidia.com/deeplearning/frameworks/tensorflow-release-notes/rel-22-09.html#rel-22-09).
 
-### Break down into end to end tests
 
-Explain what these tests test and why
+```bash
+sudo make docker-build
 
+# attach to the docker container
+sudo make start-devel
 ```
-Give an example
-```
 
-### And coding style tests
 
-Explain what these tests test and why
+#### 🔧 Running the tests <a name = "tests"></a>
 
-```
-Give an example
+After installation run the tests with pytest
+
+```bash
+pytest
 ```
 
 ## 🎈 Usage <a name="usage"></a>
 
-Add notes about how to use the system.
+To train the model run the following command
 
-## 🚀 Deployment <a name = "deployment"></a>
+```bash
+python main.py --config configs/growing_nca.yaml
+``` 
 
-Add additional notes about how to deploy this on a live system.
+### Tensorboard logging
+
+In this project we use [TensorboardX](https://github.com/lanpa/tensorboardX) was used. It logs the train/val losses, the training NCA state propagation as a gif and also the NCA propagation from the seed state. To view the logs run the following command
+
+```bash 
+tensorboard --logdir ./logs 
+```
 
 ## ⛏️ Built Using <a name = "built_using"></a>
 
-- [MongoDB](https://www.mongodb.com/) - Database
-- [Express](https://expressjs.com/) - Server Framework
-- [VueJs](https://vuejs.org/) - Web Framework
-- [NodeJs](https://nodejs.org/en/) - Server Environment
+- [Jax]() - Database
+- [Flax]() - Server Framework
+- [Optax]() - Web Framework
+- [TensorboardX]() - Server Environment
 
-## ✍️ Authors <a name = "authors"></a>
-
-- [@kylelobo](https://github.com/kylelobo) - Idea & Initial work
-
-See also the list of [contributors](https://github.com/kylelobo/The-Documentation-Compendium/contributors) who participated in this project.
 
 ## 🎉 Acknowledgements <a name = "acknowledgement"></a>
 
-- Hat tip to anyone whose code was used
-- Inspiration
-- References
+- Hat tip to the Distill team for their [blog post](https://distill.pub/2020/growing-ca/) on Neural Cellular Automata; an inspiration for this project. 
