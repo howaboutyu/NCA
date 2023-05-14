@@ -15,7 +15,7 @@
     <br> 
 </p>
 
-![NCA](./gifs/output_half.mp4)
+![NCA](./docs/gifs/output_half.mp4)
 
 ## 📝 Table of Contents
 
