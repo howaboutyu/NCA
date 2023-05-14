@@ -65,7 +65,7 @@ sudo make start-devel
 
 #### 🔧 Running the tests <a name = "tests"></a>
 
-After installation run the tests with pytest
+Check everything is installed correctly by running some tests 🔧 with pytest
 
 ```bash
 pytest
