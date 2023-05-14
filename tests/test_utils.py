@@ -4,7 +4,7 @@ import pytest
 import jax
 import numpy as np
 import os
-from nca.utils import make_gif, make_video
+from nca.utils import make_gif, make_video, download_pokemon_emoji
 
 
 def test_make_gif():
@@ -31,3 +31,11 @@ def test_make_video():
     make_video(x_array, "/tmp/test.mp4")
 
     assert os.path.exists("/tmp/test.mp4")
+
+
+def test_download_pokemon_emoji():
+    emoji_dict = download_pokemon_emoji("/tmp/pokemon_emoji")
+    assert os.path.exists("/tmp/pokemon_emoji")
+
+    assert "pikachu" in emoji_dict
+    assert ".png" in emoji_dict["pikachu"]

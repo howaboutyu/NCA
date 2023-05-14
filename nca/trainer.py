@@ -264,10 +264,13 @@ def train_and_evaluate(config: NCAConfig):
         # set the worst performing batch to the seed state
         state_grids_ranked[:1] = dataset_generator.seed_state
 
-        # replace best performing states (config.n_damage) grids with random cutouts
-        state_grids_ranked[-config.n_damage :] = NCADataGenerator.random_cutout_circle(
-            state_grids_ranked[-config.n_damage :], int(key[0])  # type: ignore
-        )
+        if config.n_damage > 0:
+            # replace best performing states (config.n_damage) grids with random cutouts
+            state_grids_ranked[
+                -config.n_damage :
+            ] = NCADataGenerator.random_cutout_circle(
+                state_grids_ranked[-config.n_damage :], int(key[0])  # type: ignore
+            )
 
         # shuffle
         shuffled_idx = jax.random.permutation(
