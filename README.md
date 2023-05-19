@@ -34,7 +34,7 @@ This project is a Jax implementation of Neural Cellular Automata (NCA) as descri
 
 ## 🏁 Getting Started <a name = "getting_started"></a>
 
-These instructions will get you setup to train the model on your local machine.  
+These instructions will get you setup to train the model on your local machine, preferably with a GPU. 
 
 
 
@@ -81,6 +81,11 @@ To train the model run the following command
 python main.py --config configs/growing_nca.yaml
 ``` 
 
+#### Configs
+
+The configs can be defined using [YAML](https://yaml.org/) files. The default config to replicate the results in the paper can be found in `configs/growing_nca_with_damage.yaml`. All the default configurations can be found in `nca/configs.py`.
+
+
 #### Tensorboard logging
 
 In this project we use [TensorboardX](https://github.com/lanpa/tensorboardX) was used. It logs the train/val losses, the training NCA state propagation as a gif and also the NCA propagation from the seed state. To view the logs run the following command
@@ -97,15 +102,14 @@ To run inference on a trained model run the following command; we will demonstra
 make download-pretrained
 ```
 
-After downloading you can run the NCAs inference using the following command
+Alternatively, you can download the checkpoint from the GitHub releases page: [link](https://github.com/howaboutyu/NCA/releases/download/v1.0.0-squinting-face-with-tongue/checkpoint_squinting_face_with_tongue). Once the download is completed you can proceed with running the NCA inference step using the following command
 
 ```bash
 python main.py --config_path=configs/growing_demo.yaml --mode=evaluate --output_video_path=demo.mp4
 2023
 ```
 
-The NCA will start with the seed state and propagate for `num_nca_steps` steps defined in the configs.
-
+Make sure to update the `weights_dir` in the configuration file with the correct path to the downloaded checkpoint. Specify the `output_video_path` as the location to save the NCA propagation in video format. When running in evaluate mode, the NCA process will begin from the initial seed state and continue for the number of steps defined in the configuration file as `num_nca_steps`.
 
 ## ⛏️ Built Using <a name = "built_using"></a>
 
@@ -117,4 +121,4 @@ The NCA will start with the seed state and propagate for `num_nca_steps` steps d
 
 ## 🎉 Acknowledgements <a name = "acknowledgement"></a>
 
-- Hat tip to the Distill team for their [blog post](https://distill.pub/2020/growing-ca/) on Neural Cellular Automata; an inspiration for this project. 
+- Hat tip to the Distill team for their [blog post](https://distill.pub/2020/growing-ca/) on Neural Cellular Automata; an inspiration on how to write a blog post. 
