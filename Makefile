@@ -5,6 +5,7 @@ DOCKER_IMAGE = nca
 DOCKERFILE = Dockerfile
 
 
+
 # Targets
 .PHONY: setup clean
 
@@ -51,3 +52,10 @@ download-pokemon-data:
 		git clone https://github.com/Templarian/slack-emoji-pokemon; \
 		echo "Done! The emojis are located in slack-emoji-pokemon/emojis"; \
 	fi
+
+download-pretrained:
+	@echo "Downloading checkpoints..."
+
+	mkdir -p ckpts
+	wget https://github.com/howaboutyu/NCA/releases/download/v1.0.0-squinting-face-with-tongue/checkpoint_squinting_face_with_tongue \
+		-O ckpts/checkpoint_squinting_face_with_tongue.ckpt 
