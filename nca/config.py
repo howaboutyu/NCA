@@ -32,3 +32,8 @@ def load_config(config_file: str) -> NCAConfig:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
     return NCAConfig(**config)
+
+
+def write_config(config: NCAConfig, config_file: str) -> None:
+    with open(config_file, "w") as f:
+        yaml.dump(config.__dict__, f)
