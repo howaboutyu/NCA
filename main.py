@@ -1,5 +1,6 @@
 import tensorflow as tf  # type: ignore
 from absl import app, flags  # type: ignore
+import wandb
 
 from nca.trainer import train_and_evaluate, evaluate
 from nca.config import load_config
@@ -26,6 +27,8 @@ def main(argv):
 
     tf.config.experimental.set_visible_devices([], "GPU")
 
+    wandb.init(project="nca", sync_tensorboard=True)
+
     config = load_config(FLAGS.config_path)
 
     if FLAGS.mode == "train_and_eval":
@@ -36,6 +39,7 @@ def main(argv):
                 "Output video path must be specified when running in evaluation mode."
             )
         evaluate(config, FLAGS.output_video_path)
+    wandb.finish()
 
 
 if __name__ == "__main__":
