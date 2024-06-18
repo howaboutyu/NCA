@@ -79,10 +79,20 @@ def perceive_non_local(
 ) -> jnp.ndarray:
     # state_grid: NCWH
     # cm: WH
-    cm1 = jnp.tanh(state_grid[:, cm1_channel_id : cm1_channel_id + 1, :, :])
-    cm2 = jnp.tanh(state_grid[:, cm2_channel_id : cm2_channel_id + 1, :, :])
-    state_grid_cm1 = state_grid @ cm1
-    state_grid_cm2 = state_grid @ cm2
+    cm1 = state_grid[:, cm1_channel_id : cm1_channel_id + 1, :, :]
+    cm2 = state_grid[:, cm2_channel_id : cm2_channel_id + 1, :, :]
+
+    # set diagonal to
+    mask = jnp.ones_like(cm1[0, ...])
+    identity = jnp.eye(cm1.shape[-1])
+
+    remove_mask = jnp.squeeze(mask) - identity
+
+    cm1 = cm1 @ remove_mask
+    cm2 = cm2 @ remove_mask
+
+    state_grid_cm1 = jax.nn.relu(state_grid @ cm1)
+    state_grid_cm2 = jax.nn.relu(state_grid @ cm2)
 
     perceived_grid = jnp.concatenate(
         [state_grid, state_grid_cm1, state_grid_cm2], axis=1
