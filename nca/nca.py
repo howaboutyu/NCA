@@ -88,8 +88,8 @@ def perceive_non_local(
 
     remove_mask = jnp.squeeze(mask) - identity
 
-    cm1 = cm1 @ remove_mask
-    cm2 = cm2 @ remove_mask
+    #cm1 = cm1 @ remove_mask
+    #cm2 = cm2 @ remove_mask
 
     state_grid_cm1 = jax.nn.relu(state_grid @ cm1)
     state_grid_cm2 = jax.nn.relu(state_grid @ cm2)

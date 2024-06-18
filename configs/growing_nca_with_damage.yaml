@@ -2,13 +2,13 @@
 
 #weights_dir: '33'
 weights_dir: 'damaged_smile/damage_ckpt/'
-checkpoint_dir: 'ckpts/damage_ckpt'
+checkpoint_dir: '/root/NCA/ckpts/damage_ckpt'
 pool_size: 1024 
 target_filename: "emoji_imgs/smile.png"
 n_damage: 1
 learning_rate: 0.0001
 total_training_steps: 100000
-batch_size: 4
+batch_size: 4 
 num_nca_steps: 120
 log_every: 200
 

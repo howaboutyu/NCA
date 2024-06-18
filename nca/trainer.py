@@ -36,7 +36,7 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
     # Create an Adam optimizer with the learning rate schedule
     optimizer = optax.chain(
         optax.clip(0.5),
-        optax.adam(learning_rate=learning_rate_schedule),
+        optax.adamw(learning_rate=learning_rate_schedule),
     )
 
     # Initialize the model with random weights
