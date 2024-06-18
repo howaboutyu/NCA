@@ -63,9 +63,6 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
         tx=optimizer,
     )
 
-    if config.checkpoint_dir:
-        state = checkpoints.restore_checkpoint(config.checkpoint_dir, target=state)
-
     # Return the TrainState object and the learning rate schedule
     return state, learning_rate_schedule
 
@@ -93,6 +90,7 @@ def create_cell_update_fn(
             kernel_x=kernel_x,
             kernel_y=kernel_y,
             update_prob=config.stochastic_update_prob,
+            use_non_local_perceive=config.use_non_local_perceive,
         )
 
     # if we want to use jit, then jit the cell_update_fn function

@@ -1,5 +1,6 @@
 import pytest
 import numpy as np
+import jax
 from jax import random
 import cv2  # type: ignore
 
@@ -36,6 +37,16 @@ def test_perception_function():
     assert y.shape == (1, 16 * 3, 32, 32)
 
 
+def test_perception_non_local():
+    key = random.PRNGKey(0)
+    input_shape = (1, 16, 32, 32)
+    x = random.normal(key, input_shape)
+
+    perceived_state = perceive_non_local(x)
+
+    assert perceived_state.shape == (1, 16 * 3, 32, 32)
+
+
 def test_cell_update_function():
     # Set up random input data
     key = random.PRNGKey(0)
@@ -54,5 +65,12 @@ def test_cell_update_function():
 
     # Compute the update with update_prob=1.0
     y = cell_update(key, x, model, params, kernel_x, kernel_y, update_prob=0.5)
+
+    assert y.shape == (4, 16, 32, 32)
+
+    # Test with non-local update
+    y = cell_update(
+        key, x, model, params, None, None, update_prob=0.5, use_non_local_perceive=True
+    )
 
     assert y.shape == (4, 16, 32, 32)

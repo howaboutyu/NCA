@@ -74,6 +74,22 @@ def perceive(
     return perceived_grid  # -> NCHW
 
 
+def perceive_non_local(
+    state_grid: jnp.ndarray, cm1_channel_id: int = 5, cm2_channel_id: int = 6
+) -> jnp.ndarray:
+    # state_grid: NCWH
+    # cm: WH
+    cm1 = jnp.tanh(state_grid[:, cm1_channel_id : cm1_channel_id + 1, :, :])
+    cm2 = jnp.tanh(state_grid[:, cm2_channel_id : cm2_channel_id + 1, :, :])
+    state_grid_cm1 = state_grid @ cm1
+    state_grid_cm2 = state_grid @ cm2
+
+    perceived_grid = jnp.concatenate(
+        [state_grid, state_grid_cm1, state_grid_cm2], axis=1
+    )
+    return perceived_grid
+
+
 def cell_update(
     key: jax.Array,
     state_grid: jax.Array,
@@ -82,6 +98,7 @@ def cell_update(
     kernel_x: jax.Array,
     kernel_y: jax.Array,
     update_prob: float = 0.5,
+    use_non_local_perceive: bool = False,
 ) -> jnp.ndarray:
     """
     Cell update function to perform the update on the given state grid.
@@ -101,8 +118,10 @@ def cell_update(
         A JAX array representing the updated state grid.
     """
     pre_alive_mask = alive_masking(state_grid[:, 3, :, :])
-
-    perceived_grid = perceive(state_grid, kernel_x, kernel_y)
+    if use_non_local_perceive is False:
+        perceived_grid = perceive(state_grid, kernel_x, kernel_y)
+    else:
+        perceived_grid = perceive_non_local(state_grid)
 
     # Transpose: NCHW -> NHWC
     perceived_grid = jnp.transpose(perceived_grid, (0, 2, 3, 1))
