@@ -40,11 +40,12 @@ def test_target_retrieval(generator: NCADataGenerator):
     assert target.shape == (32, 4, 40, 40)
 
 
-def test_random_cutout_circle(generator: NCADataGenerator):
+def test_random_cutouts(generator: NCADataGenerator):
     # Generate random data
     data_nhwc = np.zeros((generator.batch_size,) + generator.dimensions + (3,))
     data_nchw = NHWC_to_NCHW(data_nhwc)
 
     masked_data = generator.random_cutout_circle(data_nchw, seed=0)
-
     assert masked_data.shape == data_nchw.shape
+
+    masked_data = generator.random_cutout_rect(data_nchw, seed=0)

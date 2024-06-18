@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 import cv2  # type: ignore
 import tensorflow as tf  # type: ignore
-import tensorflow_addons as tfa  # type: ignore
+import keras_cv
 
 from nca.utils import NCHW_to_NHWC, NHWC_to_NCHW
 
@@ -82,25 +82,14 @@ class NCADataGenerator:
     @staticmethod
     def random_cutout_rect(
         img_nchw: Array,
-        min_size: tuple = (4, 4),
-        max_size: tuple = (32, 32),
+        height_factor: float = 0.1,
+        width_factor: float = 0.1,
         seed: int = 10,
     ):
-        rand_h = tf.random.uniform(
-            shape=[], minval=min_size[0], maxval=max_size[0], dtype=tf.int32
-        )
-        rand_w = tf.random.uniform(
-            shape=[], minval=min_size[1], maxval=max_size[1], dtype=tf.int32
-        )
-
-        # ensure divisible by 2
-        rand_h = rand_h + (rand_h % 2)
-        rand_w = rand_w + (rand_w % 2)
-
         img_nhwc = NCHW_to_NHWC(img_nchw)
-        img_nhwc = tfa.image.random_cutout(
-            img_nhwc, mask_size=(rand_h, rand_w), constant_values=0.0, seed=seed
-        ).numpy()
+        img_nhwc = keras_cv.layers.RandomCutout(height_factor, width_factor, seed=seed)(
+            img_nhwc
+        )
 
         img_nchw = NHWC_to_NCHW(img_nhwc)
 
@@ -117,21 +106,8 @@ class NCADataGenerator:
         center = tf.random.uniform([2, n, 1, 1], -0.5, 0.5, seed=seed)
         r = tf.random.uniform([n, 1, 1], 0.05, 0.2, seed=seed)
         x, y = (x - center[0]) / r, (y - center[1]) / r
-        mask = tf.cast(x * x + y * y < 1.0, tf.float32)
+        mask: tf.Tensor = tf.cast(x * x + y * y < 1.0, tf.float32)
         img_masked = img_nhwc * (1.0 - mask[..., tf.newaxis])
         img_masked = np.asarray(img_masked)
         img_masked_nchw = NHWC_to_NCHW(img_masked)
         return img_masked_nchw
-
-    @staticmethod
-    def random_rotate(img_nchw, min_angle=-np.pi, max_angle=np.pi):
-        rand_angle = tf.random.uniform(
-            shape=[], minval=min_angle, maxval=max_angle, dtype=tf.float32
-        )
-
-        img_nhwc = NCHW_to_NHWC(img_nchw)
-        img_nhwc = tfa.image.rotate(img_nhwc, rand_angle).numpy()
-
-        img_nchw = NHWC_to_NCHW(img_nhwc)
-
-        return img_nchw
