@@ -17,13 +17,13 @@ from tensorboardX import SummaryWriter  # type: ignore
 from functools import partial
 
 from nca.model import UpdateModel
-from nca.nca import create_perception_kernel, perceive, cell_update
+from nca.nca import create_perception_kernel, cell_update
 from nca.config import NCAConfig
 from nca.dataset import NCADataGenerator
-from nca.utils import make_video, NCHW_to_NHWC, NCHW_to_NHWC, mse
+from nca.utils import make_video, NCHW_to_NHWC, mse
 
 # define some types
-Array = Any
+Array = jax.Array
 FrozenDict = core.FrozenDict[str, Any]
 
 
@@ -104,7 +104,7 @@ def create_cell_update_fn(
 
 
 def nca_looper(
-    key: jax.random.PRNGKeyArray,
+    key: Array,
     params: Any,
     state_grid: Array,
     num_nca_steps: int,
@@ -122,7 +122,7 @@ def nca_looper(
 
 
 def train_step(
-    key: jax.random.PRNGKeyArray,
+    key: Array,
     state: train_state.TrainState,
     state_grid: Array,
     target: Array,
@@ -145,7 +145,7 @@ def train_step(
     """
 
     def loss_fn(
-        params: jnp.ndarray, state_grid: jnp.ndarray, key: jax.random.PRNGKeyArray
+        params: jnp.ndarray, state_grid: jnp.ndarray, key: Array
     ) -> Tuple[Array, Array]:
         # Returns loss reduced over batch and spatial dimensions and loss not reduced over batch and spatial dimensions
 
@@ -177,13 +177,13 @@ def train_step(
 
 def evaluate_step(
     state: train_state.TrainState,
-    state_grid: Array,
+    state_grid: np.ndarray,
     target: Array,
     cell_update_fn: Callable,
     num_nca_steps: int = 64,
     reduce_loss: bool = True,
     key=jax.random.PRNGKey(0),
-) -> Tuple[List[Array], Array]:
+) -> Tuple[Array, Array]:
     """Runs a single evaluation step.
 
     Args:
@@ -266,10 +266,11 @@ def train_and_evaluate(config: NCAConfig):
 
         if config.n_damage > 0:
             # replace best performing states (config.n_damage) grids with random cutouts
-            state_grids_ranked[
-                -config.n_damage :
-            ] = NCADataGenerator.random_cutout_circle(
-                state_grids_ranked[-config.n_damage :], int(key[0])  # type: ignore
+            state_grids_ranked[-config.n_damage :] = (
+                NCADataGenerator.random_cutout_circle(
+                    state_grids_ranked[-config.n_damage :],
+                    int(key[0]),  # type: ignore
+                )
             )
 
         # shuffle
@@ -342,7 +343,7 @@ def train_and_evaluate(config: NCAConfig):
 
             # write to tb
             tb_writer.add_video(
-                f"val_video", vid_tensor=tb_state_grids, fps=30, global_step=state.step
+                "val_video", vid_tensor=tb_state_grids, fps=30, global_step=state.step
             )
 
             val_state_grids = [NCHW_to_NHWC(grid) for grid in val_state_grids]
@@ -409,7 +410,10 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
 
         # 2) make a random rectange cutouts
         state_grid = NCADataGenerator.random_cutout_rect(
-            state_grid, max_size=(16, 16), seed=int(key[0])  # type: ignore
+            state_grid,
+            height_factor=0.2,
+            width_factor=0.2,
+            seed=int(key[0]),  # type: ignore
         )
 
         key, _ = jax.random.split(key)

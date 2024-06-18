@@ -7,4 +7,4 @@ pytest
 opencv-python
 imageio==2.27
 tensorflow
-tensorflow_addons
+keras_cv
