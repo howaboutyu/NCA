@@ -17,11 +17,11 @@ def get_pokemon_configs(
     """
 
     config = NCAConfig()
-    config.batch_size = 4
+    config.batch_size = 32 
     config.n_damage = 1
     config.target_filename = target_filename
-    config.weights_dir = f"checkpoints/{pokemon_name}"
-    config.checkpoint_dir = f"checkpoints/{pokemon_name}"
+    config.weights_dir = f"/checkpoints/{pokemon_name}"
+    config.checkpoint_dir = f"/checkpoints/{pokemon_name}"
     config.validation_video_dir = f"validation_videos/{pokemon_name}"
     config.log_dir = f"logs/{pokemon_name}"
     config.evaluation_video_file = f"/tmp/evaluation_video_{pokemon_name}.mp4"

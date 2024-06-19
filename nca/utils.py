@@ -132,6 +132,8 @@ def mse(
     target: Union[jnp.ndarray, np.ndarray],
     reduce_mean: bool = True,
 ) -> jnp.ndarray:
+    # pred_rgb = pred_rgb[:, :3]
+    # target = target[:, :3]
     if reduce_mean == True:
         loss_value = jnp.mean(jnp.square(pred_rgb - target))
     else:

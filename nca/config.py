@@ -21,7 +21,7 @@ class NCAConfig:
     log_every: int = 500
     num_nca_steps: int = 64  # number of steps to run NCA for
     n_damage: int = 3  # number of states in a batch to damage
-    use_non_local_perceive: bool = True 
+    use_non_local_perceive: bool = False
 
     # evaluation parameters
     total_eval_steps: int = 300

@@ -20,6 +20,7 @@ class UpdateModel(nn.Module):
             kernel_size=(1, 1),
             padding="SAME",
             kernel_init=nn.initializers.zeros,
+            use_bias=False,
         )
 
     def __call__(self, perception_vector: jnp.ndarray) -> jnp.ndarray:

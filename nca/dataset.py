@@ -25,9 +25,24 @@ class NCADataGenerator:
         self.seed_state = np.zeros(
             (self.model_output_len, self.dimensions[0], self.dimensions[1])
         )
+        self.seed_state = (
+            np.random.randint(
+                0,
+                2,
+                size=(self.model_output_len, self.dimensions[0], self.dimensions[1]),
+            )
+            * 1.0
+        )
 
         # set chemical channels 1, at the center of the grid
-        self.seed_state[3:, self.dimensions[0] // 2, self.dimensions[1] // 2] = 1.0
+        # self.seed_state[3:, self.dimensions[0] // 2, self.dimensions[1] // 2] = 1.0
+        # self.seed_state[3:, self.dimensions[0] // 2, self.dimensions[1] // 2 ] = 1.0
+        # self.seed_state[3:, self.dimensions[0] // 2, self.dimensions[1] // 2 ] = 1.0
+        # self.seed_state[3:, self.dimensions[0] // 2, self.dimensions[1] // 2 ] = 1.0
+        # self.seed_state[3:, self.dimensions[0] // 2, self.dimensions[1] // 2 ] = 1.0
+
+        # self.seed_state[3, 0:5, 0:5] = 1.0
+        # self.seed_state[4:,0:5, 0:5] = 1
 
         self.pool = np.asarray([self.seed_state] * self.pool_size)
 
@@ -40,7 +55,13 @@ class NCADataGenerator:
         )
         indices_np = np.asarray(indices)
 
-        return self.pool[indices_np], indices_np
+        updated_pool = self.pool[indices_np]
+
+        # set local channel
+        # updated_pool[:, 3, 0:5, 0:5] = 1.0
+        # updated_pool[:, 4:, 0:5, 0:5] = 1.0
+
+        return updated_pool, indices_np
 
     def update_pool(self, indices: Any, new_states: np.ndarray):
         self.pool[indices] = new_states
@@ -76,6 +97,7 @@ class NCADataGenerator:
         # Duplicate the image for batch size and transpose the axes
         target = np.asarray([img] * self.batch_size)
         target = np.transpose(target, (0, 3, 1, 2))
+        target[:, :, 0:5, 0:5] = 1.0
 
         return jnp.asarray(target)
 

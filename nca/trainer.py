@@ -43,7 +43,7 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
     model = UpdateModel(model_output_len=config.model_output_len)
     dummy_data = jax.random.normal(
         jax.random.PRNGKey(0),
-        (1, config.dimensions[0], config.dimensions[1], config.model_output_len * 3),
+        (1, config.dimensions[0], config.dimensions[1], config.model_output_len * 5),
     )
 
     if config.weights_dir:
@@ -55,7 +55,6 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
     else:
         print(f"Loading params from ckpt {config.weights_dir}")
         params = restored_dict["params"]
-
     # Create a TrainState object to hold the model state and optimizer state
     state = train_state.TrainState.create(
         apply_fn=model,
@@ -352,7 +351,7 @@ def train_and_evaluate(config: NCAConfig):
         if step % config.checkpoint_every == 0 and config.checkpoint_dir:
             # save checkpoint
             checkpoints.save_checkpoint(
-                config.checkpoint_dir, state, step=state.step, keep=3
+                config.checkpoint_dir, state, step=state.step, keep=3, overwrite=True 
             )
 
         # split the key for the next step

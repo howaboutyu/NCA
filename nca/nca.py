@@ -67,9 +67,22 @@ def perceive(
     # Compute gradients using convolution with Sobel operators
     grad_x = jax.lax.conv(state_grid, kernel_x, (1, 1), "SAME")  # -> NCHW
     grad_y = jax.lax.conv(state_grid, kernel_y, (1, 1), "SAME")  # -> NCHW
+    
+    # cm Bx1xWxH
+    cm1 = state_grid[:, 5:6, :, :]
+    cm2 = state_grid[:, 6:7, :, :]
+
+    # state_grid BxCxWxH
+
+    #state_grid_cm = jax.nn.relu(state_grid @ cm) 
+    state_grid_cm1 = state_grid @ cm1
+    state_grid_cm2 = jnp.transpose(state_grid, (0, 1, 3, 2)) @ cm2
+
+    #state_grid_cm = (state_grid_cm1 + state_grid_cm2)/2.
 
     # Concatenate the state grid with the gradients along the channel axis
-    perceived_grid = jnp.concatenate([state_grid, grad_x, grad_y], axis=1)
+    perceived_grid = jnp.concatenate([state_grid, grad_x, grad_y, state_grid_cm1, state_grid_cm2], axis=1)
+    #perceived_grid = jnp.concatenate([state_grid, state_grid,state_grid_cm1, state_grid_cm2], axis=1)
 
     return perceived_grid  # -> NCHW
 
@@ -83,10 +96,10 @@ def perceive_non_local(
     cm2 = state_grid[:, cm2_channel_id : cm2_channel_id + 1, :, :]
 
     # set diagonal to
-    mask = jnp.ones_like(cm1[0, ...])
-    identity = jnp.eye(cm1.shape[-1])
+    #mask = jnp.ones_like(cm1[0, ...])
+    #identity = jnp.eye(cm1.shape[-1])
 
-    remove_mask = jnp.squeeze(mask) - identity
+    #remove_mask = jnp.squeeze(mask) - identity
 
     #cm1 = cm1 @ remove_mask
     #cm2 = cm2 @ remove_mask
