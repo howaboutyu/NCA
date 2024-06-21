@@ -8,3 +8,4 @@ opencv-python
 imageio==2.27
 tensorflow
 keras_cv
+wandb

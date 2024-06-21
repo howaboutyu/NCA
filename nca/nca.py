@@ -72,8 +72,18 @@ def perceive(
     cm1 = state_grid[:, 5:6, :, :]
     cm2 = state_grid[:, 6:7, :, :]
 
-    # state_grid BxCxWxH
+    def set_diagonal_zero(matrix):
+        batch_size, channels, height, width = matrix.shape
+        identity = jnp.eye(height, width)
+        identity = jnp.expand_dims(identity, axis=0)  # Add batch dimension
+        identity = jnp.expand_dims(identity, axis=0)  # Add channel dimension
+        return matrix * (1 - identity)
 
+    cm1 = set_diagonal_zero(cm1)
+    cm2 = set_diagonal_zero(cm2)
+
+    # state_grid BxCxWxH
+    # transpose : BxWxHxC
     #state_grid_cm = jax.nn.relu(state_grid @ cm) 
     state_grid_cm1 = state_grid @ cm1
     state_grid_cm2 = jnp.transpose(state_grid, (0, 1, 3, 2)) @ cm2

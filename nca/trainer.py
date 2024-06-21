@@ -226,7 +226,9 @@ def train_and_evaluate(config: NCAConfig):
         model_output_len=config.model_output_len,
     )
 
-    train_target = dataset_generator.get_target(config.target_filename)
+    #use_file_name = False
+    #if use_file_name: 
+
 
     # create a random key for generating subkeys
     key = jax.random.PRNGKey(0)
@@ -245,8 +247,13 @@ def train_and_evaluate(config: NCAConfig):
     train_step_jit = jax.jit(p_train_step)
 
     for step in range(state.step, config.total_training_steps):
+
         # get the training data
         state_grids, state_grid_indices = dataset_generator.sample(key, damage=False)
+
+
+        #train_target = dataset_generator.get_target(config.target_filename)
+        train_target = dataset_generator.get_target(state_grid_indices)
 
         loss_non_reduced_np = np.asarray(
             mse(state_grids[:, :4], train_target, reduce_mean=False)
@@ -259,7 +266,7 @@ def train_and_evaluate(config: NCAConfig):
         state_grids_ranked = state_grids[loss_rank]
 
         # set the worst performing batch to the seed state
-        state_grids_ranked[:1] = dataset_generator.seed_state
+        state_grids_ranked[:1] = dataset_generator.get_seed_state()
 
         if config.n_damage > 0:
             # replace best performing states (config.n_damage) grids with random cutouts
@@ -318,7 +325,7 @@ def train_and_evaluate(config: NCAConfig):
         if step % config.eval_every == 0:
             # Evaluate the model starting with a seed state and propagate for `config.total_eval_steps` steps
             # The gif is also logged with tensorboardX
-            seed_grid = dataset_generator.seed_state[np.newaxis, ...]
+            seed_grid = dataset_generator.get_seed_state()[np.newaxis, ...]
 
             val_state_grids, loss = evaluate_step(
                 state,
@@ -390,7 +397,7 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
 
     num_loops = int(config.total_eval_steps // config.num_nca_steps)
 
-    state_grid = dataset_generator.seed_state[np.newaxis, ...]
+    state_grid = dataset_generator.get_seed_state()[np.newaxis, ...]
     state_grid_cache = []
 
     key = jax.random.PRNGKey(0)
