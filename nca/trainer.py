@@ -19,7 +19,7 @@ from functools import partial
 from nca.model import UpdateModel
 from nca.nca import create_perception_kernel, cell_update
 from nca.config import NCAConfig
-from nca.dataset import NCADataGenerator
+from nca.dataset import NCADataGenerator, XorDataGenerator
 from nca.utils import make_video, NCHW_to_NHWC, mse
 
 # define some types
@@ -156,8 +156,12 @@ def train_step(
 
         # used for visualizing the state grid during training
         jnp_state_grid_sequence = jnp.asarray(state_grid_sequence)
+        pered_rgb = pred_rgba[..., :3][5:, 5:, :]
+        target = target[5:, 5:, :]
 
-        return mse(pred_rgba, target), jnp_state_grid_sequence
+        loss_value = jnp.mean((pered_rgb - target) ** 2)
+        return loss_value, jnp_state_grid_sequence
+        #return mse(pred_rgba, target), jnp_state_grid_sequence
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
@@ -219,7 +223,8 @@ def train_and_evaluate(config: NCAConfig):
 
     cell_update_fn = create_cell_update_fn(config, state.apply_fn, use_jit=False)
 
-    dataset_generator = NCADataGenerator(
+    #dataset_generator = NCADataGenerator(
+    dataset_generator = XorDataGenerator(
         pool_size=config.pool_size,
         batch_size=config.batch_size,
         dimensions=config.dimensions,
@@ -252,7 +257,9 @@ def train_and_evaluate(config: NCAConfig):
         state_grids, state_grid_indices = dataset_generator.sample(key, damage=False)
 
 
-        #train_target = dataset_generator.get_target(config.target_filename)
+        # FOR IMAGE: 
+        # train_target = dataset_generator.get_target(config.target_filename)
+        # FOR LOGIC: 
         train_target = dataset_generator.get_target(state_grid_indices)
 
         loss_non_reduced_np = np.asarray(
@@ -264,18 +271,21 @@ def train_and_evaluate(config: NCAConfig):
 
         # Rank from highest to lowest loss
         state_grids_ranked = state_grids[loss_rank]
+        train_target = train_target[loss_rank]
 
         # set the worst performing batch to the seed state
-        state_grids_ranked[:1] = dataset_generator.get_seed_state()
+        state_grids_ranked[:1], target_state = dataset_generator.get_seed_state()
 
-        if config.n_damage > 0:
-            # replace best performing states (config.n_damage) grids with random cutouts
-            state_grids_ranked[-config.n_damage :] = (
-                NCADataGenerator.random_cutout_circle(
-                    state_grids_ranked[-config.n_damage :],
-                    int(key[0]),  # type: ignore
-                )
-            )
+        train_target[:1] = target_state
+
+        #if config.n_damage > 0:
+        #    # replace best performing states (config.n_damage) grids with random cutouts
+        #    state_grids_ranked[-config.n_damage :] = (
+        #        NCADataGenerator.random_cutout_circle(
+        #            state_grids_ranked[-config.n_damage :],
+        #            int(key[0]),  # type: ignore
+        #        )
+        #    )
 
         # shuffle
         shuffled_idx = jax.random.permutation(

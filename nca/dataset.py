@@ -23,7 +23,6 @@ class NCADataGenerator:
 
     def __post_init__(self):
         self.seed_state = self.get_seed_state()
-        
 
         # old:  set chemical channels 1, at the center of the grid
         # self.seed_state[3:, self.dimensions[0] // 2, self.dimensions[1] // 2] = 1.0
@@ -31,14 +30,17 @@ class NCADataGenerator:
         self.pool = np.asarray([self.seed_state] * self.pool_size)
 
     def get_seed_state(self):
-        seed_state = np.random.randint(
+        seed_state = (
+            np.random.randint(
                 0,
                 2,
                 size=(self.model_output_len, self.dimensions[0], self.dimensions[1]),
-            )* 1.0
+            )
+            * 1.0
+        )
 
-        seed_state[:3] = 0.
-        
+        seed_state[:3] = 0.0
+
         return seed_state
 
     def sample(
@@ -88,7 +90,7 @@ class NCADataGenerator:
         # Duplicate the image for batch size and transpose the axes
         target = np.asarray([img] * self.batch_size)
         target = np.transpose(target, (0, 3, 1, 2))
-        #target[:, :, 0:5, 0:5] = 1.0
+        # target[:, :, 0:5, 0:5] = 1.0
 
         return jnp.asarray(target)
 
@@ -124,7 +126,6 @@ class NCADataGenerator:
         img_masked = np.asarray(img_masked)
         img_masked_nchw = NHWC_to_NCHW(img_masked)
         return img_masked_nchw
-
 
 
 @dataclass
@@ -138,25 +139,15 @@ class XorDataGenerator:
     pool_targets: np.ndarray = field(init=False)
     xor_dict: Dict[Tuple[int, int], int] = field(init=False)
 
-
     def __post_init__(self):
-        
-        #self.pool = np.asarray([self.seed_state] * self.pool_size)
+        # self.pool = np.asarray([self.seed_state] * self.pool_size)
 
-        #self.pool_condition = np.random.rand(0, num_classes + 1, size=(self.pool_size, ))
+        # self.pool_condition = np.random.rand(0, num_classes + 1, size=(self.pool_size, ))
 
-        self.xor_dict = {
-            (0,0): 0,
-            (0,1): 1,
-            (1,0): 1,
-            (1,1): 0 
-        }
-        #seed_states = self.get_seed_state()
-
+        self.xor_dict = {(0, 0): 0, (0, 1): 1, (1, 0): 1, (1, 1): 0}
+        # seed_states = self.get_seed_state()
         seed_states = []
-
         xor_list = list(self.xor_dict)
-
         pool_targets = []
         for pool_id in range(self.pool_size):
             rand_class = np.random.randint(0, 4)
@@ -164,44 +155,86 @@ class XorDataGenerator:
             input = xor_list[rand_class]
             output = self.xor_dict[input]
 
-            rand_state = np.random.randint(
-                0,
-                2,
-                size=(self.model_output_len, self.dimensions[0], self.dimensions[1]),
-            )* 1.0
+            rand_state = (
+                np.random.randint(
+                    0,
+                    2,
+                    size=(
+                        self.model_output_len,
+                        self.dimensions[0],
+                        self.dimensions[1],
+                    ),
+                )
+                * 1.0
+            )
+
+            rand_target_state = (
+                np.zeros(
+                    (
+                        self.model_output_len,
+                        self.dimensions[0],
+                        self.dimensions[1],
+                    ),
+                )
+                * 1.0
+            )
 
             if input[0] == 1:
-                rand_state[3:, 0:5, 0:5 ] = 1.
+                rand_state[3:, 0:5, 0:5] = 1.0  # top left
 
             if input[1] == 1:
-                rand_state[3:, 5:, 0:5 ] = 1.
+                rand_state[3:, 5:, 0:5] = 1.0  # top right
+
+            if output == 1:
+                rand_target_state[3:, 5:, 5:] = 1.0
+            else:
+                rand_target_state[3:, 5:, 5:] = 0.0
 
             seed_states.append(rand_state)
+            pool_targets.append(rand_target_state)
 
-            pool_targets.append(output)
+        self.seed_states = np.asarray(seed_states)
+        self.pool = seed_states.copy()
+        self.pool_targets = np.asarray(pool_targets)
+        
 
-        seed_states = np.asarray(seed_states)
-        pool_targets = np.asarray(pool_targets) 
-
-        #import pdb; pdb.set_trace()
-
-        self.seed_state = seed_states
-        self.pool = pool_targets
-
-
-
-
+        # import pdb; pdb.set_trace()
 
 
     def get_seed_state(self, class_id):
-        seed_state = np.random.randint(
+        seed_state = (
+            np.random.randint(
                 0,
                 2,
                 size=(self.model_output_len, self.dimensions[0], self.dimensions[1]),
-            )* 1.0
+            )
+            * 1.0
+        )
 
-        
-        return seed_state
+
+
+        rand_id = np.random.randint(0, 4)
+
+        input = self.xor_list[rand_id]
+
+        if input[0] == 1:
+            seed_state[3:, 0:5, 0:5] = 1.0
+
+        if input[1] == 1:
+            seed_state[3:, 5:, 0:5] = 1.0
+
+        target = self.xor_dict[input]
+
+        target_state= np.zeros((self.model_output_len, self.dimensions[0], self.dimensions[1]))
+
+        if target == 1:
+            target_state[3:, 5:, 5:] = 1.0
+        elif target == 0:
+            target_state[3:, 5:, 5:] = 0.0
+
+
+
+        return seed_state, target_state
 
     def sample(
         self, key: Any, damage: bool = False, K: int = 1
@@ -214,6 +247,9 @@ class XorDataGenerator:
 
         updated_pool = self.pool[indices_np]
 
+
+
+
         return updated_pool, indices_np
 
     def update_pool(self, indices: Any, new_states: np.ndarray):
@@ -224,18 +260,16 @@ class XorDataGenerator:
 
         all_targets = []
         for indices in state_grid_indices:
-            target_mat = np.zeros(size=(self.model_output_len, self.dimensions[0], self.dimensions[1]),
+            target_map = self.pool_targets[indices]
+            
 
-            target_value = self.pool_targets 
-            target[:. 5:, 5:]
+            all_targets.append(target_map)
 
-
-        
-        
-        #target = np.transpose(target, (0, 3, 1, 2))
-        #target[:, :, 0:5, 0:5] = 1.0
-
-        return jnp.asarray(target)
+        target = np.asarray(all_targets)
+        target = np.transpose(target, (0, 3, 1, 2))
+        # target[:, :, 0:5, 0:5] = 1.0
+        return all_targets 
+        # return jnp.asarray(target)
 
     @staticmethod
     def random_cutout_rect(
@@ -271,9 +305,15 @@ class XorDataGenerator:
         return img_masked_nchw
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     xor = XorDataGenerator(
-        pool_size= 8, 
-        batch_size=4,  
-        dimensions=(56, 56) , model_output_len=16)
+        pool_size=8, batch_size=4, dimensions=(56, 56), model_output_len=16
+    )
 
+    xor.get_target(
+        [
+            0,
+            1,
+            2,
+        ]
+    )
