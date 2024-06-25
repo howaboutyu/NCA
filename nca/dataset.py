@@ -155,6 +155,7 @@ class XorDataGenerator:
 
             input = xor_list[rand_class]
             output = self.xor_dict[input]
+            
 
             rand_state = (
                 np.random.randint(
@@ -166,7 +167,7 @@ class XorDataGenerator:
                         self.dimensions[1],
                     ),
                 )
-                * 1.0
+                * 1.0 
             )
 
             rand_target_state = (
@@ -181,15 +182,21 @@ class XorDataGenerator:
             )
 
             if input[0] == 1:
-                rand_state[3:, 0:5, 0:5] = 1.0  # top left
+                rand_state[:, 0:5, 0:5] = 1.0  # top left
+            else:
+                rand_state[:, 0:5, 0:5] = 0.5  # top left
+                rand_state[4:, 0:5, 0:5] = 1.0  # top left
 
             if input[1] == 1:
-                rand_state[3:, 5:, 0:5] = 1.0  # top right
+                rand_state[:, -5:, 0:5] = 1.0  # top right
+            else:
+                rand_state[:, -5:, 0:5] = 0.5  # top right
+                rand_state[4:, -5:, 0:5] = 1.0  # top right
 
             if output == 1:
-                rand_target_state[3:, 5:, 5:] = 1.0
+                rand_target_state[0:4, -5:, -5:] = 1.0
             else:
-                rand_target_state[3:, 5:, 5:] = 0.0
+                rand_target_state[0:4, 0:5,-5:] = 1.0
 
             seed_states.append(rand_state)
             pool_targets.append(rand_target_state)
@@ -209,7 +216,7 @@ class XorDataGenerator:
                 2,
                 size=(self.model_output_len, self.dimensions[0], self.dimensions[1]),
             )
-            * 1.0
+            *1.0 
         )
 
 
@@ -219,19 +226,25 @@ class XorDataGenerator:
         input = self.xor_list[rand_id]
 
         if input[0] == 1:
-            seed_state[3:, 0:5, 0:5] = 1.0
+            seed_state[:, 0:5, 0:5] = 1.0
+        else:
+            seed_state[:, 0:5, 0:5] = 0.5
+            seed_state[4:, 0:5, 0:5] = 1.0
 
         if input[1] == 1:
-            seed_state[3:, 5:, 0:5] = 1.0
+            seed_state[:, -5:, 0:5] = 1.0
+        else:
+            seed_state[:, -5:, 0:5] = 0.5
+            seed_state[4:, -5:, 0:5] = 1.0
 
         target = self.xor_dict[input]
 
         target_state= np.zeros((self.model_output_len, self.dimensions[0], self.dimensions[1]))
 
         if target == 1:
-            target_state[3:, 5:, 5:] = 1.0
+            target_state[0:4, -5:, -5:] = 1.0
         elif target == 0:
-            target_state[3:, 5:, 5:] = 0.0
+            target_state[0:4, 0:5, -5:] = 1.0
 
 
 

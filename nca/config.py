@@ -4,8 +4,8 @@ import yaml  # type: ignore
 
 @dataclass
 class NCAConfig:
-    dimensions: tuple = (56, 56)
-    model_output_len: int = 16
+    dimensions: tuple = (20,  20)
+    model_output_len: int = 32 
     batch_size: int = 16
     total_training_steps: int = 100000
     eval_every: int = 500

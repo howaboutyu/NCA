@@ -156,9 +156,14 @@ def train_step(
 
         # used for visualizing the state grid during training
         jnp_state_grid_sequence = jnp.asarray(state_grid_sequence)
-        pred_rgb = pred_rgba[:, :3, -5:, -5:]
-        target_rgb = target[:, :3, -5:, -5:]
-        loss_value = jnp.mean((pred_rgb - target_rgb) ** 2)
+        pred_rgb1 = pred_rgba[:, :4, 0:4, -4:]
+        target_rgb1 = target[:, :4, 0:4, -4:]
+        pred_rgb2 = pred_rgba[:, :4, -4:, -4:]
+        target_rgb2 = target[:, :4, -4:, -4:]
+
+
+        loss_value = jnp.mean((pred_rgb1 - target_rgb1) ** 2 + (pred_rgb2 - target_rgb2) ** 2)
+
         return loss_value, jnp_state_grid_sequence
         #return mse(pred_rgba, target), jnp_state_grid_sequence
 
@@ -205,7 +210,10 @@ def evaluate_step(
         cell_update_fn=cell_update_fn,
     )
 
-    loss_value = mse(pred_rgba, target, reduce_loss)
+    pred_rgb = pred_rgba[:, :3]
+    target = target[:,:3]
+
+    loss_value = mse(pred_rgb, target, reduce_loss)
 
     # return the predicted RGB values, loss as a tuple
     return state_grids, loss_value
@@ -261,10 +269,11 @@ def train_and_evaluate(config: NCAConfig):
         # FOR LOGIC: 
         train_target = dataset_generator.get_target(state_grid_indices)
 
-        import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
 
         loss_non_reduced_np = np.asarray(
-            mse(state_grids[:, :3], train_target[:, :3], reduce_mean=False)
+            #mse(state_grids[:, :3], train_target[:, :3], reduce_mean=False)
+            mse(state_grids[:, :3, :, -5:], train_target[:, :3, :, -5:], reduce_mean=False)
         )
         loss_per_batch_np = np.mean(loss_non_reduced_np, axis=(1, 2, 3))
 
@@ -275,9 +284,9 @@ def train_and_evaluate(config: NCAConfig):
         train_target = train_target[loss_rank]
 
         # set the worst performing batch to the seed state
-        state_grids_ranked[:1], target_state = dataset_generator.get_seed_state()
+        #state_grids_ranked[:1], target_state = dataset_generator.get_seed_state()
 
-        train_target[:1] = target_state
+        #train_target[:1] = target_state
 
         #if config.n_damage > 0:
         #    # replace best performing states (config.n_damage) grids with random cutouts
@@ -308,7 +317,9 @@ def train_and_evaluate(config: NCAConfig):
 
         # replace the pool with final state grid
         final_training_grid = np.squeeze(training_grid_array[-1])
-        dataset_generator.update_pool(state_grid_indices, final_training_grid)
+        #if np.random.randint(0, 100) > 98:
+        #dataset_generator.update_pool(state_grid_indices[:1], final_training_grid[:1])
+        #dataset_generator.update_pool(state_grid_indices, final_training_grid)
         print(f"training_grid_array min: {jnp.min(training_grid_array)}")
         print(f"training_grid_array max: {jnp.max(training_grid_array)}")
         print(f"state_grid_indices: {state_grid_indices}")
@@ -336,18 +347,23 @@ def train_and_evaluate(config: NCAConfig):
         if step % config.eval_every == 0:
             # Evaluate the model starting with a seed state and propagate for `config.total_eval_steps` steps
             # The gif is also logged with tensorboardX
-            seed_grid = dataset_generator.get_seed_state()[np.newaxis, ...]
+            seed_grid, target_state = dataset_generator.get_seed_state()
+            seed_grid = jnp.expand_dims(seed_grid, 0)
+            target_state = jnp.expand_dims(target_state, 0)
+            #import pdb; pdb.set_trace()
+
+
 
             val_state_grids, loss = evaluate_step(
                 state,
                 seed_grid,
-                train_target[:1],
+                target_state,
                 cell_update_fn,
                 num_nca_steps=config.total_eval_steps,
             )
 
             tb_writer.add_scalar("val_loss", np.asarray(loss), state.step)
-            tb_writer.add_image("target_img", np.asarray(train_target[0]), state.step)
+            tb_writer.add_image("target_img", np.asarray(target_state[0, :3]).astype(np.float32), state.step)
 
             tb_state_grids = np.array(val_state_grids)
             tb_state_grids = np.clip(tb_state_grids, 0.0, 1.0)

@@ -28,7 +28,7 @@ def main(argv):
     tf.config.experimental.set_visible_devices([], "GPU")
 
     config = load_config(FLAGS.config_path)
-    #wandb.init(project="nca", sync_tensorboard=True, config=config)
+    wandb.init(project="nca", sync_tensorboard=True, config=config)
 
     if FLAGS.mode == "train_and_eval":
         train_and_evaluate(config)

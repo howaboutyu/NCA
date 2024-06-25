@@ -71,6 +71,8 @@ def perceive(
     # cm Bx1xWxH
     cm1 = state_grid[:, 5:6, :, :]
     cm2 = state_grid[:, 6:7, :, :]
+    cm3 = state_grid[:, 7:8, :, :]
+    cm4 = state_grid[:, 8:9, :, :]
 
     def set_diagonal_zero(matrix):
         batch_size, channels, height, width = matrix.shape
@@ -85,8 +87,8 @@ def perceive(
     # state_grid BxCxWxH
     # transpose : BxWxHxC
     #state_grid_cm = jax.nn.relu(state_grid @ cm) 
-    state_grid_cm1 = state_grid @ cm1
-    state_grid_cm2 = jnp.transpose(state_grid, (0, 1, 3, 2)) @ cm2
+    state_grid_cm1 = state_grid @ cm1 + cm3
+    state_grid_cm2 = jnp.transpose(state_grid, (0, 1, 3, 2)) @ cm2 + cm4
 
     #state_grid_cm = (state_grid_cm1 + state_grid_cm2)/2.
 
@@ -169,8 +171,16 @@ def cell_update(
 
     # Transpose: NHWC -> NCHW
     ds = jnp.transpose(ds, (0, 3, 1, 2))
+    
+    #ds[:, :, :5, :5] = 0 
+    #ds[:, :, -5:, :5] = 0 
+    ds = ds.at[:, :, :5, :5].set(0)
+    ds = ds.at[:, :, -5:, :5].set(0)
 
+
+    #ds = jnp.tanh(ds)
     state_grid = state_grid + ds
+
 
     post_alive_mask = alive_masking(state_grid[:, 3, :, :])
     alive_mask = pre_alive_mask * post_alive_mask
