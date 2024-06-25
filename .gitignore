@@ -137,3 +137,5 @@ logs
 checkpoints
 ckpts/
 *.mp4
+
+wandb/

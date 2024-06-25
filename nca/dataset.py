@@ -148,6 +148,7 @@ class XorDataGenerator:
         # seed_states = self.get_seed_state()
         seed_states = []
         xor_list = list(self.xor_dict)
+        self.xor_list= xor_list
         pool_targets = []
         for pool_id in range(self.pool_size):
             rand_class = np.random.randint(0, 4)
@@ -194,14 +195,14 @@ class XorDataGenerator:
             pool_targets.append(rand_target_state)
 
         self.seed_states = np.asarray(seed_states)
-        self.pool = seed_states.copy()
+        self.pool = self.seed_states.copy()
         self.pool_targets = np.asarray(pool_targets)
         
 
-        # import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
 
 
-    def get_seed_state(self, class_id):
+    def get_seed_state(self):
         seed_state = (
             np.random.randint(
                 0,
@@ -244,8 +245,7 @@ class XorDataGenerator:
             key, shape=(self.batch_size,), minval=0, maxval=self.pool_size
         )
         indices_np = np.asarray(indices)
-
-        updated_pool = self.pool[indices_np]
+        updated_pool = np.asarray([self.pool[p_id] for   p_id in indices_np])
 
 
 
@@ -253,6 +253,7 @@ class XorDataGenerator:
         return updated_pool, indices_np
 
     def update_pool(self, indices: Any, new_states: np.ndarray):
+        #import pdb; pdb.set_trace()
         self.pool[indices] = new_states
 
     def get_target(self, state_grid_indices) -> jax.Array:
@@ -262,13 +263,13 @@ class XorDataGenerator:
         for indices in state_grid_indices:
             target_map = self.pool_targets[indices]
             
-
             all_targets.append(target_map)
 
         target = np.asarray(all_targets)
-        target = np.transpose(target, (0, 3, 1, 2))
+        #import pdb; pdb.set_trace()
+        #target = np.transpose(target, (0, 3, 1, 2))
         # target[:, :, 0:5, 0:5] = 1.0
-        return all_targets 
+        return target 
         # return jnp.asarray(target)
 
     @staticmethod

@@ -156,10 +156,9 @@ def train_step(
 
         # used for visualizing the state grid during training
         jnp_state_grid_sequence = jnp.asarray(state_grid_sequence)
-        pered_rgb = pred_rgba[..., :3][5:, 5:, :]
-        target = target[5:, 5:, :]
-
-        loss_value = jnp.mean((pered_rgb - target) ** 2)
+        pred_rgb = pred_rgba[:, :3, -5:, -5:]
+        target_rgb = target[:, :3, -5:, -5:]
+        loss_value = jnp.mean((pred_rgb - target_rgb) ** 2)
         return loss_value, jnp_state_grid_sequence
         #return mse(pred_rgba, target), jnp_state_grid_sequence
 
@@ -262,8 +261,10 @@ def train_and_evaluate(config: NCAConfig):
         # FOR LOGIC: 
         train_target = dataset_generator.get_target(state_grid_indices)
 
+        import pdb; pdb.set_trace()
+
         loss_non_reduced_np = np.asarray(
-            mse(state_grids[:, :4], train_target, reduce_mean=False)
+            mse(state_grids[:, :3], train_target[:, :3], reduce_mean=False)
         )
         loss_per_batch_np = np.mean(loss_non_reduced_np, axis=(1, 2, 3))
 
