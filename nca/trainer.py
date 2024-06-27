@@ -156,10 +156,10 @@ def train_step(
 
         # used for visualizing the state grid during training
         jnp_state_grid_sequence = jnp.asarray(state_grid_sequence)
-        pred_rgb1 = pred_rgba[:, :4, 0:4, -4:]
-        target_rgb1 = target[:, :4, 0:4, -4:]
+        pred_rgb1 = pred_rgba[:, :4 , 0:4, -4:]
+        target_rgb1 = target[:, :4  , 0:4, -4:]
         pred_rgb2 = pred_rgba[:, :4, -4:, -4:]
-        target_rgb2 = target[:, :4, -4:, -4:]
+        target_rgb2 = target[:, :4 , -4:, -4:]
 
 
         loss_value = jnp.mean((pred_rgb1 - target_rgb1) ** 2 + (pred_rgb2 - target_rgb2) ** 2)
@@ -275,6 +275,7 @@ def train_and_evaluate(config: NCAConfig):
             #mse(state_grids[:, :3], train_target[:, :3], reduce_mean=False)
             mse(state_grids[:, :3, :, -5:], train_target[:, :3, :, -5:], reduce_mean=False)
         )
+        
         loss_per_batch_np = np.mean(loss_non_reduced_np, axis=(1, 2, 3))
 
         loss_rank = np.argsort(loss_per_batch_np)[::-1]
@@ -284,18 +285,18 @@ def train_and_evaluate(config: NCAConfig):
         train_target = train_target[loss_rank]
 
         # set the worst performing batch to the seed state
-        #state_grids_ranked[:1], target_state = dataset_generator.get_seed_state()
+        state_grids_ranked[:1], target_state = dataset_generator.get_seed_state()
 
-        #train_target[:1] = target_state
+        train_target[:1] = target_state
 
-        #if config.n_damage > 0:
-        #    # replace best performing states (config.n_damage) grids with random cutouts
-        #    state_grids_ranked[-config.n_damage :] = (
-        #        NCADataGenerator.random_cutout_circle(
-        #            state_grids_ranked[-config.n_damage :],
-        #            int(key[0]),  # type: ignore
-        #        )
-        #    )
+        if config.n_damage > 0:
+            # replace best performing states (config.n_damage) grids with random cutouts
+            state_grids_ranked[-config.n_damage :] = (
+                NCADataGenerator.random_cutout_circle(
+                    state_grids_ranked[-config.n_damage :],
+                    int(key[0]),  # type: ignore
+                )
+            )
 
         # shuffle
         shuffled_idx = jax.random.permutation(
@@ -319,7 +320,7 @@ def train_and_evaluate(config: NCAConfig):
         final_training_grid = np.squeeze(training_grid_array[-1])
         #if np.random.randint(0, 100) > 98:
         #dataset_generator.update_pool(state_grid_indices[:1], final_training_grid[:1])
-        #dataset_generator.update_pool(state_grid_indices, final_training_grid)
+        dataset_generator.update_pool(state_grid_indices, final_training_grid)
         print(f"training_grid_array min: {jnp.min(training_grid_array)}")
         print(f"training_grid_array max: {jnp.max(training_grid_array)}")
         print(f"state_grid_indices: {state_grid_indices}")

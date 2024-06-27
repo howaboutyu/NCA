@@ -181,17 +181,14 @@ class XorDataGenerator:
                 * 1.0
             )
 
+            rand_state[13] = 0
+            rand_state[14] = 0
+
             if input[0] == 1:
-                rand_state[:, 0:5, 0:5] = 1.0  # top left
-            else:
-                rand_state[:, 0:5, 0:5] = 0.5  # top left
-                rand_state[4:, 0:5, 0:5] = 1.0  # top left
+                rand_state[13, :] = 1.0  # top left
 
             if input[1] == 1:
-                rand_state[:, -5:, 0:5] = 1.0  # top right
-            else:
-                rand_state[:, -5:, 0:5] = 0.5  # top right
-                rand_state[4:, -5:, 0:5] = 1.0  # top right
+                rand_state[14, :] = 1.0  # top left
 
             if output == 1:
                 rand_target_state[0:4, -5:, -5:] = 1.0
@@ -225,17 +222,28 @@ class XorDataGenerator:
 
         input = self.xor_list[rand_id]
 
+        seed_state[13] = 0
+        seed_state[14] = 0
+
         if input[0] == 1:
-            seed_state[:, 0:5, 0:5] = 1.0
-        else:
-            seed_state[:, 0:5, 0:5] = 0.5
-            seed_state[4:, 0:5, 0:5] = 1.0
+            seed_state[13, :] = 1.0  # top left
 
         if input[1] == 1:
-            seed_state[:, -5:, 0:5] = 1.0
-        else:
-            seed_state[:, -5:, 0:5] = 0.5
-            seed_state[4:, -5:, 0:5] = 1.0
+            seed_state[14, :] = 1.0  # top left
+
+
+
+        #if input[0] == 1:
+        #    seed_state[:, 0:5, 0:5] = 1.0
+        #else:
+        #    seed_state[:, 0:5, 0:5] = 0.5
+        #    seed_state[4:, 0:5, 0:5] = 1.0
+
+        #if input[1] == 1:
+        #    seed_state[:, -5:, 0:5] = 1.0
+        #else:
+        #    seed_state[:, -5:, 0:5] = 0.5
+        #    seed_state[4:, -5:, 0:5] = 1.0
 
         target = self.xor_dict[input]
 

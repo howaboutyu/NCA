@@ -87,8 +87,8 @@ def perceive(
     # state_grid BxCxWxH
     # transpose : BxWxHxC
     #state_grid_cm = jax.nn.relu(state_grid @ cm) 
-    state_grid_cm1 = state_grid @ cm1 + cm3
-    state_grid_cm2 = jnp.transpose(state_grid, (0, 1, 3, 2)) @ cm2 + cm4
+    state_grid_cm1 =state_grid @  cm1 #+ cm3
+    state_grid_cm2 = jnp.transpose(state_grid, (0, 1, 3, 2)) @ cm2  #+ cm4
 
     #state_grid_cm = (state_grid_cm1 + state_grid_cm2)/2.
 
@@ -174,8 +174,10 @@ def cell_update(
     
     #ds[:, :, :5, :5] = 0 
     #ds[:, :, -5:, :5] = 0 
-    ds = ds.at[:, :, :5, :5].set(0)
-    ds = ds.at[:, :, -5:, :5].set(0)
+    #ds = ds.at[:, :, :5, :5].set(0)
+    #ds = ds.at[:, :, -5:, :5].set(0)
+    ds = ds.at[:, 13, :, :].set(0)
+    ds = ds.at[:, 14, :, :].set(0)
 
 
     #ds = jnp.tanh(ds)
