@@ -105,9 +105,12 @@ def test_learned_perception_cell_update():
 def test_global_context_cell_update():
     key = random.PRNGKey(0)
     x = random.normal(key, (4, 16, 32, 32))
-    model = UpdateModel(nonlocal_connections=True)
-    params = model.init(key, random.normal(key, (1, 32, 32, 16 * 3)))
+    model = UpdateModel(
+        perception_method="sobel_second", nonlocal_connections=True
+    )
+    params = model.init(key, random.normal(key, (1, 32, 32, 16 * 5)))
     kernel_x, kernel_y = create_perception_kernel(16, 16, use_oihw_layout=True)
+    kernel_xx, kernel_yy = create_second_derivative_kernels(16, 16)
     y = cell_update(
         key,
         x,
@@ -116,5 +119,8 @@ def test_global_context_cell_update():
         kernel_x,
         kernel_y,
         update_prob=0.5,
+        perception_method="sobel_second",
+        kernel_xx=kernel_xx,
+        kernel_yy=kernel_yy,
     )
     assert y.shape == x.shape

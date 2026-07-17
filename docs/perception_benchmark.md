@@ -111,17 +111,27 @@ g = \frac{1}{HW}\sum_{i=1}^{H}\sum_{j=1}^{W} p_{ij},
 z_{ij} = \left[p_{ij},\; \phi(g)\right],
 $$
 
-where \(p_{ij}\) is the local perception at cell \((i,j)\), and
-\(\phi: \mathbb{R}^{C}\rightarrow\mathbb{R}^{32}\) is a learned dense
+For this PR, the local perception is specifically the second-derivative
+operator:
+
+$$
+p_{ij} =
+\left[u_{ij},\; (u_x)_{ij},\; (u_y)_{ij},\;
+(u_{xx})_{ij},\; (u_{yy})_{ij}\right].
+$$
+
+Here \(p_{ij}\) is the 80-dimensional local perception vector at cell
+\((i,j)\) for \(C=16\) state channels, and
+\(\phi: \mathbb{R}^{80}\rightarrow\mathbb{R}^{32}\) is a learned dense
 projection. Thus every cell receives information derived from the entire grid.
-This is the architecture-level long-range experiment.
+This is an addition to `sobel_second`, not a separate Sobel operator.
 
 20-step CPU smoke benchmark at 32×32:
 
 | Method | Step time | Final MSE |
 | --- | ---: | ---: |
-| `sobel_second` | 151.66 ms | 0.1799 |
-| `global_context` | 157.58 ms | 0.1914 |
+| `sobel_second` | 137.49 ms | 0.1799 |
+| `sobel_second_global` | 148.43 ms | 0.1807 |
 
 The global branch is functional, but this short run does not yet show an
 accuracy benefit. A full CUDA training run is needed for a stronger comparison.
