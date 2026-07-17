@@ -17,10 +17,43 @@ includes XLA compilation; steady-state timing excludes it.
 | `sobel_second` | 13.76 s | 8.73 ms | 0.0873381 |
 | `learned` | 15.21 s | 13.17 ms | 0.1830653 |
 
+For a state channel (u(x,y)), the first- and second-order derivatives are
+
+$$
+u_x = \frac{\partial u}{\partial x}, \qquad
+u_y = \frac{\partial u}{\partial y}, \qquad
+u_{xx} = \frac{\partial^2 u}{\partial x^2}, \qquad
+u_{yy} = \frac{\partial^2 u}{\partial y^2}.
+$$
+
+The second-derivative kernels used by `sobel_second` are
+
+$$
+K_{xx} =
+\begin{bmatrix}
+0 & 0 & 0 \\
+1 & -2 & 1 \\
+0 & 0 & 0
+\end{bmatrix},
+\qquad
+K_{yy} =
+\begin{bmatrix}
+0 & 1 & 0 \\
+0 & -2 & 0 \\
+0 & 1 & 0
+\end{bmatrix}.
+$$
+
+The resulting perception vector is
+
+$$
+P(u) = \left[u,\; u_x,\; u_y,\; u_{xx},\; u_{yy}\right].
+$$
+
+For (C=16) state channels, this produces (5C=80) perception channels.
 `sobel_fused` computes the same X and Y Sobel features in one convolution.
-`sobel_second` adds (u_{xx}) and (u_{yy}) to the perception vector using
-3×3 finite-difference kernels, giving the update network curvature information
-as well as first-order gradients. In this run it was both faster and more
-accurate than the first-order variants. The learned 3×3 perception block is
-trainable and valid, but needs a longer or better matched training schedule
-before it is competitive on accuracy.
+`sobel_second` gives the update network curvature information as well as
+first-order gradients. In this run it was both faster and more accurate than
+the first-order variants. The learned 3×3 perception block is trainable and
+valid, but needs a longer or better matched training schedule before it is
+competitive on accuracy.
