@@ -11,6 +11,13 @@ class NCAConfig:
     # derivatives, while ``learned`` trains a 3x3 perception convolution.
     perception_method: str = "sobel"
     nonlocal_connections: bool = False
+    nonlocal_mode: str = "global"
+    nonlocal_token_grid: int = 8
+    nonlocal_attention_dim: int = 32
+    # Initial living-cell pattern. ``single`` preserves the original seed;
+    # ``random`` uses ``seed_density``; ``pokeball`` uses a compact RGBA icon.
+    seed_pattern: str = "single"
+    seed_size: int = 11
     # Fraction of grid cells initialized as living cells. Zero preserves the
     # original single-cell center seed.
     seed_density: float = 0.0

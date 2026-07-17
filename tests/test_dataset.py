@@ -24,6 +24,17 @@ def test_random_seed_distribution():
     np.testing.assert_array_equal(alive, generator.seed_state[4] > 0)
 
 
+def test_pokeball_seed_is_compact_and_colored():
+    generator = NCADataGenerator(
+        1, 1, (56, 56), 16, seed_pattern="pokeball", seed_size=11
+    )
+    alive = generator.seed_state[3] > 0
+    assert alive.sum() < 150
+    assert alive[28, 28]
+    assert generator.seed_state[0, 25, 28] > generator.seed_state[1, 25, 28]
+    assert np.all(generator.seed_state[3:, alive] == 1.0)
+
+
 def test_sample_generation(generator: NCADataGenerator):
     key = jax.random.PRNGKey(0)
 

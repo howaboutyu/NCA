@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jnp
 import flax.linen as nn
 from typing import Callable
@@ -7,6 +8,9 @@ class UpdateModel(nn.Module):
     model_output_len: int = 16
     perception_method: str = "sobel"
     nonlocal_connections: bool = False
+    nonlocal_mode: str = "global"
+    nonlocal_token_grid: int = 8
+    nonlocal_attention_dim: int = 32
     kernel_init: Callable = nn.initializers.glorot_uniform
 
     def setup(self):
@@ -19,7 +23,16 @@ class UpdateModel(nn.Module):
                 kernel_init=self.kernel_init(),
             )
         if self.nonlocal_connections:
-            self.global_projection = nn.Dense(32)
+            if self.nonlocal_mode == "token_attention":
+                self.query_projection = nn.Dense(self.nonlocal_attention_dim)
+                self.key_projection = nn.Dense(self.nonlocal_attention_dim)
+                self.value_projection = nn.Dense(self.nonlocal_attention_dim)
+                self.context_gate = nn.Dense(
+                    1,
+                    bias_init=nn.initializers.constant(-4.0),
+                )
+            else:
+                self.global_projection = nn.Dense(32)
         self.conv_1 = nn.Conv(
             128,
             kernel_size=(1, 1),
@@ -47,15 +60,34 @@ class UpdateModel(nn.Module):
             perception_vector = self.perception(perception_vector)
 
         if self.nonlocal_connections:
-            # Every cell receives a learned summary of the entire grid. This
-            # is a low-cost long-range connection, rather than a wider local
-            # convolution: the summary is pooled globally and broadcast back.
-            global_context = jnp.mean(perception_vector, axis=(1, 2), keepdims=True)
-            global_context = self.global_projection(global_context)
-            global_context = jnp.broadcast_to(
-                global_context,
-                perception_vector.shape[:3] + (global_context.shape[-1],),
-            )
+            if self.nonlocal_mode == "token_attention":
+                batch, height, width, _ = perception_vector.shape
+                tokens = jax.image.resize(
+                    perception_vector,
+                    (batch, self.nonlocal_token_grid, self.nonlocal_token_grid,
+                     perception_vector.shape[-1]),
+                    method="linear",
+                )
+                tokens = tokens.reshape(batch, -1, perception_vector.shape[-1])
+                queries = self.query_projection(perception_vector)
+                keys = self.key_projection(tokens)
+                values = self.value_projection(tokens)
+                scores = jnp.einsum("bhwd,bnd->bhwn", queries, keys)
+                scores = scores / jnp.sqrt(float(self.nonlocal_attention_dim))
+                weights = nn.softmax(scores, axis=-1)
+                global_context = jnp.einsum("bhwn,bnd->bhwd", weights, values)
+                gate = nn.sigmoid(self.context_gate(perception_vector))
+                global_context = gate * global_context
+            else:
+                # Every cell receives a learned summary of the entire grid.
+                global_context = jnp.mean(
+                    perception_vector, axis=(1, 2), keepdims=True
+                )
+                global_context = self.global_projection(global_context)
+                global_context = jnp.broadcast_to(
+                    global_context,
+                    perception_vector.shape[:3] + (global_context.shape[-1],),
+                )
             perception_vector = jnp.concatenate(
                 [perception_vector, global_context], axis=-1
             )

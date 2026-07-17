@@ -124,3 +124,28 @@ def test_global_context_cell_update():
         kernel_yy=kernel_yy,
     )
     assert y.shape == x.shape
+
+
+def test_token_attention_cell_update():
+    key = random.PRNGKey(0)
+    x = random.normal(key, (1, 16, 32, 32))
+    model = UpdateModel(
+        perception_method="sobel_second",
+        nonlocal_connections=True,
+        nonlocal_mode="token_attention",
+    )
+    params = model.init(key, random.normal(key, (1, 32, 32, 16 * 5)))
+    kernel_x, kernel_y = create_perception_kernel(16, 16, use_oihw_layout=True)
+    kernel_xx, kernel_yy = create_second_derivative_kernels(16, 16)
+    y = cell_update(
+        key,
+        x,
+        model,
+        params,
+        kernel_x,
+        kernel_y,
+        perception_method="sobel_second",
+        kernel_xx=kernel_xx,
+        kernel_yy=kernel_yy,
+    )
+    assert y.shape == x.shape

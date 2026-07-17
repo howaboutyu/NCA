@@ -19,17 +19,25 @@ class NCADataGenerator:
     model_output_len: int
     seed_density: float = 0.0
     seed_random_seed: int = 0
+    seed_pattern: str = "single"
+    seed_size: int = 11
     seed_state: np.ndarray = field(init=False)
     pool: np.ndarray = field(init=False)
 
     def __post_init__(self):
         if not 0.0 <= self.seed_density <= 1.0:
             raise ValueError("seed_density must be between 0.0 and 1.0")
+        if self.seed_pattern not in {"single", "random", "pokeball"}:
+            raise ValueError("seed_pattern must be 'single', 'random', or 'pokeball'")
+        if self.seed_size < 3 or self.seed_size % 2 == 0:
+            raise ValueError("seed_size must be an odd integer >= 3")
         self.seed_state = np.zeros(
             (self.model_output_len, self.dimensions[0], self.dimensions[1])
         )
 
-        if self.seed_density == 0.0:
+        if self.seed_pattern == "pokeball":
+            self._initialize_pokeball()
+        elif self.seed_density == 0.0 and self.seed_pattern == "single":
             # Original single-cell center seed.
             self.seed_state[
                 3:, self.dimensions[0] // 2, self.dimensions[1] // 2
@@ -43,6 +51,28 @@ class NCADataGenerator:
             self.seed_state[3:, alive] = 1.0
 
         self.pool = np.asarray([self.seed_state] * self.pool_size)
+
+    def _initialize_pokeball(self):
+        """Place a compact Poké Ball icon at the center of the seed grid."""
+        h, w = self.dimensions
+        radius = self.seed_size / 2.0
+        cy, cx = h // 2, w // 2
+        yy, xx = np.ogrid[:h, :w]
+        distance = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
+        mask = distance <= radius
+        band = np.abs(yy - cy) <= max(1, self.seed_size // 10)
+        button = distance <= max(1.0, self.seed_size / 7.0)
+
+        # Channels 0:3 are the visible RGB seed; channel 3 is its alpha/living
+        # channel. Hidden channels are initialized as living wherever the icon
+        # is present, matching the existing NCA seed convention.
+        self.seed_state[0, mask & (yy <= cy)] = 0.9  # red
+        self.seed_state[1, mask & (yy <= cy)] = 0.05
+        self.seed_state[2, mask & (yy <= cy)] = 0.05
+        self.seed_state[0:3, mask & (yy > cy)] = 1.0  # white
+        self.seed_state[0:3, mask & band] = 0.02  # black band
+        self.seed_state[0:3, mask & button] = 1.0  # white center button
+        self.seed_state[3:, mask] = 1.0
 
     def sample(
         self, key: Any, damage: bool = False, K: int = 1

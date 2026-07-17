@@ -65,6 +65,9 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
         model_output_len=config.model_output_len,
         perception_method=config.perception_method,
         nonlocal_connections=config.nonlocal_connections,
+        nonlocal_mode=config.nonlocal_mode,
+        nonlocal_token_grid=config.nonlocal_token_grid,
+        nonlocal_attention_dim=config.nonlocal_attention_dim,
     )
     dummy_data = jax.random.normal(
         jax.random.PRNGKey(0),
@@ -291,6 +294,8 @@ def train_and_evaluate(config: NCAConfig):
         model_output_len=config.model_output_len,
         seed_density=config.seed_density,
         seed_random_seed=config.seed_random_seed,
+        seed_pattern=config.seed_pattern,
+        seed_size=config.seed_size,
     )
 
     train_target = dataset_generator.get_target(config.target_filename)
@@ -449,6 +454,8 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
         model_output_len=config.model_output_len,
         seed_density=config.seed_density,
         seed_random_seed=config.seed_random_seed,
+        seed_pattern=config.seed_pattern,
+        seed_size=config.seed_size,
     )
 
     nca_looper_fn = partial(
