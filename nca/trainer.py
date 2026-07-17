@@ -47,7 +47,9 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
 
     restored_dict = None
     if config.weights_dir:
-        restored_dict = checkpoints.restore_checkpoint(config.weights_dir, target=None)
+        restored_dict = checkpoints.restore_checkpoint(
+            os.path.abspath(config.weights_dir), target=None
+        )
 
     if restored_dict == None:
         params = model.init(jax.random.PRNGKey(0), dummy_data)
@@ -64,7 +66,9 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
     )
 
     if config.checkpoint_dir:
-        state = checkpoints.restore_checkpoint(config.checkpoint_dir, target=state)
+        state = checkpoints.restore_checkpoint(
+            os.path.abspath(config.checkpoint_dir), target=state
+        )
 
     # Return the TrainState object and the learning rate schedule
     return state, learning_rate_schedule
@@ -354,7 +358,7 @@ def train_and_evaluate(config: NCAConfig):
         if step % config.checkpoint_every == 0 and config.checkpoint_dir:
             # save checkpoint
             checkpoints.save_checkpoint(
-                config.checkpoint_dir, state, step=state.step, keep=3
+                os.path.abspath(config.checkpoint_dir), state, step=state.step, keep=3
             )
 
         # split the key for the next step
@@ -374,7 +378,7 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
     state, _ = create_state(config)
 
     if config.weights_dir:
-        state = checkpoints.restore_checkpoint(config.weights_dir, state)
+        state = checkpoints.restore_checkpoint(os.path.abspath(config.weights_dir), state)
 
     cell_update_fn = create_cell_update_fn(config, state.apply_fn)
 
