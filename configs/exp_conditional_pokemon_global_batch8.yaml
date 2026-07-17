@@ -6,7 +6,7 @@ perception_method: sobel_second
 nonlocal_connections: true
 nonlocal_mode: global
 pokemon_embedding_dim: 32
-dynamic_class_token: true
+dynamic_class_token: false
 class_token_scale: 4.0
 pokemon_targets:
   - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/bulbasaur.png"
@@ -26,11 +26,11 @@ total_eval_steps: 300
 learning_rate: 0.0001
 n_damage: 1
 target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/dodrio.png"
-weights_dir: "runs/conditional_pokemon_global_batch8_dynamic/checkpoints"
-checkpoint_dir: "runs/conditional_pokemon_global_batch8_dynamic/checkpoints"
-validation_video_dir: "runs/conditional_pokemon_global_batch8_dynamic/validation_videos"
-log_dir: "runs/conditional_pokemon_global_batch8_dynamic/logs"
-evaluation_video_file: "runs/conditional_pokemon_global_batch8_dynamic/evaluation.mp4"
+weights_dir: "runs/conditional_pokemon_global_batch8_fixed/checkpoints"
+checkpoint_dir: "runs/conditional_pokemon_global_batch8_static_retrain/checkpoints"
+validation_video_dir: "runs/conditional_pokemon_global_batch8_static_retrain/validation_videos"
+log_dir: "runs/conditional_pokemon_global_batch8_static_retrain/logs"
+evaluation_video_file: "runs/conditional_pokemon_global_batch8_static_retrain/evaluation.mp4"
 checkpoint_every: 500
 eval_every: 500
 log_every: 500
