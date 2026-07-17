@@ -1,6 +1,7 @@
 import pytest
 import numpy as np
 from jax import random
+import jax.numpy as jnp
 import cv2  # type: ignore
 
 from context import *
@@ -149,3 +150,16 @@ def test_token_attention_cell_update():
         kernel_yy=kernel_yy,
     )
     assert y.shape == x.shape
+
+
+def test_conditional_pokemon_embedding_changes_model_conditioning():
+    key = random.PRNGKey(0)
+    model = UpdateModel(
+        perception_method="sobel_second",
+        pokemon_vocab_size=3,
+        pokemon_embedding_dim=8,
+    )
+    inputs = random.normal(key, (2, 16, 16, 16 * 5))
+    params = model.init(key, inputs, pokemon_ids=jnp.array([0, 1]))
+    output = model.apply(params, inputs, pokemon_ids=jnp.array([0, 1]))
+    assert output.shape == (2, 16, 16, 16)

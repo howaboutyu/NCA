@@ -35,6 +35,17 @@ def test_pokeball_seed_is_compact_and_colored():
     assert np.all(generator.seed_state[3:, alive] == 1.0)
 
 
+def test_multi_pokemon_pool_assigns_balanced_ids():
+    generator = NCADataGenerator(
+        5,
+        2,
+        (40, 40),
+        16,
+        pokemon_targets=("a.png", "b.png"),
+    )
+    np.testing.assert_array_equal(generator.pool_pokemon_ids, [0, 1, 0, 1, 0])
+
+
 def test_sample_generation(generator: NCADataGenerator):
     key = jax.random.PRNGKey(0)
 

@@ -68,6 +68,8 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
         nonlocal_mode=config.nonlocal_mode,
         nonlocal_token_grid=config.nonlocal_token_grid,
         nonlocal_attention_dim=config.nonlocal_attention_dim,
+        pokemon_vocab_size=len(config.pokemon_targets),
+        pokemon_embedding_dim=config.pokemon_embedding_dim,
     )
     dummy_data = jax.random.normal(
         jax.random.PRNGKey(0),
@@ -94,7 +96,11 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
         )
 
     if restored_dict == None:
-        params = model.init(jax.random.PRNGKey(0), dummy_data)
+        params = model.init(
+            jax.random.PRNGKey(0),
+            dummy_data,
+            pokemon_ids=jnp.zeros((1,), dtype=jnp.int32),
+        )
         print("Initializing params from scratch")
     else:
         print(f"Loading params from ckpt {config.weights_dir}")
@@ -143,7 +149,7 @@ def create_cell_update_fn(
         )
 
     # define a function to update the cell state grid using the provided model function and parameters
-    def cell_update_fn(key, state_grid, params):
+    def cell_update_fn(key, state_grid, params, pokemon_ids=None):
         # call the cell_update function with the provided inputs and the perception kernels
         return cell_update(
             key=key,
@@ -158,6 +164,7 @@ def create_cell_update_fn(
             kernel_yy=kernel_yy,
             kernel_x5=kernel_x5,
             kernel_y5=kernel_y5,
+            pokemon_ids=pokemon_ids,
         )
 
     # if we want to use jit, then jit the cell_update_fn function
@@ -174,11 +181,12 @@ def nca_looper(
     state_grid: Array,
     num_nca_steps: int,
     cell_update_fn: Callable,
+    pokemon_ids: Optional[Array] = None,
 ) -> Tuple[Array, Array]:
     state_grid_sequence = []
     for _ in range(num_nca_steps):
         _, key = jax.random.split(key)
-        state_grid = cell_update_fn(key, state_grid, params)
+        state_grid = cell_update_fn(key, state_grid, params, pokemon_ids)
         state_grid_sequence.append(state_grid)
 
     pred_rgba = state_grid[:, :4]
@@ -194,6 +202,7 @@ def train_step(
     cell_update_fn: Callable,
     num_nca_steps: int = 64,
     apply_grad: Optional[bool] = True,
+    pokemon_ids: Optional[Array] = None,
 ) -> Tuple[train_state.TrainState, Array, Array]:
     """Runs a single training step.
 
@@ -220,6 +229,7 @@ def train_step(
             state_grid,
             num_nca_steps=num_nca_steps,
             cell_update_fn=cell_update_fn,
+            pokemon_ids=pokemon_ids,
         )
 
         # used for visualizing the state grid during training
@@ -248,6 +258,7 @@ def evaluate_step(
     num_nca_steps: int = 64,
     reduce_loss: bool = True,
     key=jax.random.PRNGKey(0),
+    pokemon_ids: Optional[Array] = None,
 ) -> Tuple[Array, Array]:
     """Runs a single evaluation step.
 
@@ -268,6 +279,7 @@ def evaluate_step(
         state_grid=state_grid,
         num_nca_steps=num_nca_steps,
         cell_update_fn=cell_update_fn,
+        pokemon_ids=pokemon_ids,
     )
 
     loss_value = mse(pred_rgba, target, reduce_loss)
@@ -296,9 +308,10 @@ def train_and_evaluate(config: NCAConfig):
         seed_random_seed=config.seed_random_seed,
         seed_pattern=config.seed_pattern,
         seed_size=config.seed_size,
+        pokemon_targets=config.pokemon_targets,
     )
 
-    train_target = dataset_generator.get_target(config.target_filename)
+    targets_by_pokemon = dataset_generator.get_targets(config.target_filename)
 
     # create a random key for generating subkeys
     key = jax.random.PRNGKey(0)
@@ -319,6 +332,9 @@ def train_and_evaluate(config: NCAConfig):
     for step in range(state.step, config.total_training_steps):
         # get the training data
         state_grids, state_grid_indices = dataset_generator.sample(key, damage=False)
+        pokemon_ids = dataset_generator.pool_pokemon_ids[state_grid_indices]
+        batch_indices = np.arange(config.batch_size)
+        train_target = targets_by_pokemon[pokemon_ids, batch_indices]
 
         loss_non_reduced_np = np.asarray(
             mse(state_grids[:, :4], train_target, reduce_mean=False)
@@ -329,6 +345,8 @@ def train_and_evaluate(config: NCAConfig):
 
         # Rank from highest to lowest loss
         state_grids_ranked = state_grids[loss_rank]
+        target_ranked = train_target[loss_rank]
+        pokemon_ids_ranked = pokemon_ids[loss_rank]
 
         # set the worst performing batch to the seed state
         state_grids_ranked[:1] = dataset_generator.seed_state
@@ -348,6 +366,8 @@ def train_and_evaluate(config: NCAConfig):
         )
         shuffled_idx = np.asarray(shuffled_idx)
         state_grids_ranked = state_grids_ranked[shuffled_idx]
+        target_ranked = target_ranked[shuffled_idx]
+        pokemon_ids_ranked = pokemon_ids_ranked[shuffled_idx]
 
         (
             state,
@@ -357,7 +377,8 @@ def train_and_evaluate(config: NCAConfig):
             key,
             state,
             state_grids_ranked,
-            train_target,
+            target_ranked,
+            pokemon_ids=pokemon_ids_ranked,
         )
 
         # replace the pool with final state grid
@@ -395,9 +416,10 @@ def train_and_evaluate(config: NCAConfig):
             val_state_grids, loss = evaluate_step(
                 state,
                 seed_grid,
-                train_target[:1],
+                targets_by_pokemon[:1],
                 cell_update_fn,
                 num_nca_steps=config.total_eval_steps,
+                pokemon_ids=jnp.zeros((1,), dtype=jnp.int32),
             )
 
             tb_writer.add_scalar("val_loss", np.asarray(loss), state.step)
@@ -456,6 +478,7 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
         seed_random_seed=config.seed_random_seed,
         seed_pattern=config.seed_pattern,
         seed_size=config.seed_size,
+        pokemon_targets=config.pokemon_targets,
     )
 
     nca_looper_fn = partial(
