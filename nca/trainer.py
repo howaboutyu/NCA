@@ -10,14 +10,18 @@ from dataclasses import dataclass
 import cv2  # type: ignore
 import numpy as np
 from typing import Tuple, List, Dict, Any, Callable, Optional
-import tensorflow as tf  # type: ignore
 from tqdm import tqdm  # type: ignore
 import os
 from tensorboardX import SummaryWriter  # type: ignore
 from functools import partial
 
 from nca.model import UpdateModel
-from nca.nca import create_perception_kernel, cell_update
+from nca.nca import (
+    create_perception_kernel,
+    create_second_derivative_kernels,
+    create_multiscale_perception_kernels,
+    cell_update,
+)
 from nca.config import NCAConfig
 from nca.dataset import NCADataGenerator
 from nca.utils import make_video, NCHW_to_NHWC, mse
@@ -40,15 +44,45 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
     )
 
     # Initialize the model with random weights
-    model = UpdateModel(model_output_len=config.model_output_len)
+    valid_methods = {
+        "sobel",
+        "sobel_fused",
+        "sobel_second",
+        "sobel_multiscale",
+        "learned",
+    }
+    if config.perception_method not in valid_methods:
+        raise ValueError(
+            f"perception_method must be one of {sorted(valid_methods)}, "
+            f"got {config.perception_method!r}"
+        )
+    model = UpdateModel(
+        model_output_len=config.model_output_len,
+        perception_method=config.perception_method,
+    )
     dummy_data = jax.random.normal(
         jax.random.PRNGKey(0),
-        (1, config.dimensions[0], config.dimensions[1], config.model_output_len * 3),
+        (
+            1,
+            config.dimensions[0],
+            config.dimensions[1],
+            config.model_output_len
+            if config.perception_method == "learned"
+            else config.model_output_len
+            * (
+                5
+                if config.perception_method
+                in {"sobel_second", "sobel_multiscale"}
+                else 3
+            ),
+        ),
     )
 
     restored_dict = None
     if config.weights_dir:
-        restored_dict = checkpoints.restore_checkpoint(config.weights_dir, target=None)
+        restored_dict = checkpoints.restore_checkpoint(
+            os.path.abspath(config.weights_dir), target=None
+        )
 
     if restored_dict == None:
         params = model.init(jax.random.PRNGKey(0), dummy_data)
@@ -65,7 +99,9 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
     )
 
     if config.checkpoint_dir:
-        state = checkpoints.restore_checkpoint(config.checkpoint_dir, target=state)
+        state = checkpoints.restore_checkpoint(
+            os.path.abspath(config.checkpoint_dir), target=state
+        )
 
     # Return the TrainState object and the learning rate schedule
     return state, learning_rate_schedule
@@ -82,6 +118,20 @@ def create_cell_update_fn(
         output_size=config.model_output_len,
         use_oihw_layout=True,
     )
+    kernel_xx = kernel_yy = None
+    if config.perception_method == "sobel_second":
+        kernel_xx, kernel_yy = create_second_derivative_kernels(
+            input_size=config.model_output_len,
+            output_size=config.model_output_len,
+            use_oihw_layout=True,
+        )
+    kernel_x5 = kernel_y5 = None
+    if config.perception_method == "sobel_multiscale":
+        kernel_x5, kernel_y5 = create_multiscale_perception_kernels(
+            input_size=config.model_output_len,
+            output_size=config.model_output_len,
+            use_oihw_layout=True,
+        )
 
     # define a function to update the cell state grid using the provided model function and parameters
     def cell_update_fn(key, state_grid, params):
@@ -94,6 +144,11 @@ def create_cell_update_fn(
             kernel_x=kernel_x,
             kernel_y=kernel_y,
             update_prob=config.stochastic_update_prob,
+            perception_method=config.perception_method,
+            kernel_xx=kernel_xx,
+            kernel_yy=kernel_yy,
+            kernel_x5=kernel_x5,
+            kernel_y5=kernel_y5,
         )
 
     # if we want to use jit, then jit the cell_update_fn function
@@ -228,6 +283,8 @@ def train_and_evaluate(config: NCAConfig):
         batch_size=config.batch_size,
         dimensions=config.dimensions,
         model_output_len=config.model_output_len,
+        seed_density=config.seed_density,
+        seed_random_seed=config.seed_random_seed,
     )
 
     train_target = dataset_generator.get_target(config.target_filename)
@@ -355,7 +412,7 @@ def train_and_evaluate(config: NCAConfig):
         if step % config.checkpoint_every == 0 and config.checkpoint_dir:
             # save checkpoint
             checkpoints.save_checkpoint(
-                config.checkpoint_dir, state, step=state.step, keep=3
+                os.path.abspath(config.checkpoint_dir), state, step=state.step, keep=3
             )
 
         # split the key for the next step
@@ -375,7 +432,7 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
     state, _ = create_state(config)
 
     if config.weights_dir:
-        state = checkpoints.restore_checkpoint(config.weights_dir, state)
+        state = checkpoints.restore_checkpoint(os.path.abspath(config.weights_dir), state)
 
     cell_update_fn = create_cell_update_fn(config, state.apply_fn)
 
@@ -384,6 +441,8 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
         batch_size=config.batch_size,
         dimensions=config.dimensions,
         model_output_len=config.model_output_len,
+        seed_density=config.seed_density,
+        seed_random_seed=config.seed_random_seed,
     )
 
     nca_looper_fn = partial(
@@ -435,10 +494,10 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
     # NCHW -> NHWC
     rgb = jnp.transpose(rgb, (0, 2, 3, 1))
 
-    # resize with tf
-    rgb = tf.image.resize(
-        rgb, (256, 256), method=tf.image.ResizeMethod.NEAREST_NEIGHBOR
-    ).numpy()
+    # Resize through JAX so evaluation does not initialize a second GPU
+    # runtime (TensorFlow and JAX competing for the same CUDA context).
+    rgb = jax.image.resize(rgb, (rgb.shape[0], 256, 256, 3), method="nearest")
+    rgb = np.asarray(rgb)
 
     if output_video_path is None:
         make_video(rgb, config.evaluation_video_file)

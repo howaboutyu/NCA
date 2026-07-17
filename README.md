@@ -49,6 +49,17 @@ Install the other dependencies with pip
 pip install -r requirements.txt
 ```
 
+For NVIDIA GPU training, use the CUDA 12 JAX extra instead:
+
+```bash
+make setup-gpu
+python -c "import jax; print(jax.devices())"
+python main.py --config_path configs/growing_nca.yaml
+```
+
+The device check should report a `CudaDevice`. The Dockerfile provides the same
+CUDA 12 setup for a containerized run.
+
 
 #### With GPU docker (recommended)
 
@@ -88,6 +99,12 @@ python main.py --config_path configs/growing_nca.yaml
 Configuration settings can be defined using YAML files. The default configuration file to reproduce the results mentioned in the paper can be found at `configs/growing_nca_with_damage.yaml`. For all the default configurations, please refer to nca/configs.py.
 
 To specify your own target image, you can modify the `target_filename` field in the YAML file to the desired image filename. Please ensure that the image has an alpha channel.
+
+Select the perception implementation with `perception_method`: `sobel` (the original two-convolution path), `sobel_fused` (an equivalent fused convolution), `sobel_second` (adds second derivatives), `sobel_multiscale` (combines 3x3 and 5x5 gradients), or `learned` (a trainable 3x3 convolutional perception block). Compare them with:
+
+```bash
+python scripts/benchmark_perception.py --steps 100 --nca-steps 32
+```
 
 
 ### Inference

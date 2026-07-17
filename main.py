@@ -1,4 +1,3 @@
-import tensorflow as tf  # type: ignore
 from absl import app, flags  # type: ignore
 
 from nca.trainer import train_and_evaluate, evaluate
@@ -23,8 +22,6 @@ flags.mark_flag_as_required("config_path")
 
 def main(argv):
     del argv
-
-    tf.config.experimental.set_visible_devices([], "GPU")
 
     config = load_config(FLAGS.config_path)
 

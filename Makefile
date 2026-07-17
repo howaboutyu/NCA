@@ -17,6 +17,11 @@ setup:
 	pip install -r $(REQUIREMENTS_FILE)
 	@echo "Done ✌️"
 
+setup-gpu:
+	@echo "Installing GPU dependencies..."
+	pip install -r requirements-gpu.txt
+	@echo "Done ✌️"
+
 clean:
 	@read -p "Are you sure you want to delete ckpts and logs? [y/N] " confirmation && \
     	if [ "$$confirmation" = "y" ] || [ "$$confirmation" = "Y" ] ; then \

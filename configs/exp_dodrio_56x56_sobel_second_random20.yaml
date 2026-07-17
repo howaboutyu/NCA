@@ -1,0 +1,23 @@
+# Random Pokémon experiment: dodrio.png at 56x56 using second-derivative
+# perception and a fixed random 20% grid-cell seed distribution.
+dimensions: [56, 56]
+model_output_len: 16
+perception_method: sobel_second
+seed_density: 0.2
+seed_random_seed: 0
+batch_size: 4
+pool_size: 1000
+total_training_steps: 100000
+num_nca_steps: 64
+total_eval_steps: 300
+learning_rate: 0.0001
+n_damage: 1
+target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/dodrio.png"
+weights_dir: ""
+checkpoint_dir: "runs/dodrio_56x56_sobel_second_random20/checkpoints"
+validation_video_dir: "runs/dodrio_56x56_sobel_second_random20/validation_videos"
+log_dir: "runs/dodrio_56x56_sobel_second_random20/logs"
+evaluation_video_file: "runs/dodrio_56x56_sobel_second_random20/evaluation.mp4"
+checkpoint_every: 500
+eval_every: 500
+log_every: 500

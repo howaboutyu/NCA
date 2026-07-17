@@ -44,8 +44,54 @@ def create_perception_kernel(
     return kernel_x / 8.0, kernel_y / 8.0
 
 
+def create_second_derivative_kernels(
+    input_size: int = 16, output_size: int = 16, use_oihw_layout: bool = True
+) -> tuple:
+    """Create finite-difference kernels for the pure second derivatives."""
+    kernel_xx = jnp.zeros((3, 3, input_size, output_size), dtype=jnp.float32)
+    kernel_xx = kernel_xx + jnp.array([[0, 0, 0], [1, -2, 1], [0, 0, 0]])[
+        :, :, jnp.newaxis, jnp.newaxis
+    ]
+    kernel_yy = kernel_xx.transpose(1, 0, 2, 3)
+
+    if use_oihw_layout:
+        kernel_xx = jnp.transpose(kernel_xx, (3, 2, 0, 1))
+        kernel_yy = jnp.transpose(kernel_yy, (3, 2, 0, 1))
+
+    return kernel_xx, kernel_yy
+
+
+def create_multiscale_perception_kernels(
+    input_size: int = 16, output_size: int = 16, use_oihw_layout: bool = True
+) -> tuple:
+    """Create 3x3 and 5x5 Sobel-like first-derivative kernels."""
+    smooth = jnp.array([1, 4, 6, 4, 1], dtype=jnp.float32)
+    derivative = jnp.array([-1, -2, 0, 2, 1], dtype=jnp.float32)
+    kernel_x = smooth[:, None] * derivative[None, :]
+    kernel_y = kernel_x.T
+    kernel_x = kernel_x[:, :, None, None] * jnp.ones(
+        (1, 1, input_size, output_size), dtype=jnp.float32
+    )
+    kernel_y = kernel_y[:, :, None, None] * jnp.ones(
+        (1, 1, input_size, output_size), dtype=jnp.float32
+    )
+
+    if use_oihw_layout:
+        kernel_x = jnp.transpose(kernel_x, (3, 2, 0, 1))
+        kernel_y = jnp.transpose(kernel_y, (3, 2, 0, 1))
+
+    return kernel_x / 32.0, kernel_y / 32.0
+
+
 def perceive(
-    state_grid: jnp.ndarray, kernel_x: jnp.ndarray, kernel_y: jnp.ndarray
+    state_grid: jnp.ndarray,
+    kernel_x: jnp.ndarray,
+    kernel_y: jnp.ndarray,
+    method: str = "sobel",
+    kernel_xx: Optional[jnp.ndarray] = None,
+    kernel_yy: Optional[jnp.ndarray] = None,
+    kernel_x5: Optional[jnp.ndarray] = None,
+    kernel_y5: Optional[jnp.ndarray] = None,
 ) -> jnp.ndarray:
     """Perceive an input state grid using edge detection.
 
@@ -64,9 +110,56 @@ def perceive(
         input state grid, and the next two sets correspond to the
         gradients in the x and y directions, respectively.
     """
-    # Compute gradients using convolution with Sobel operators
-    grad_x = jax.lax.conv(state_grid, kernel_x, (1, 1), "SAME")  # -> NCHW
-    grad_y = jax.lax.conv(state_grid, kernel_y, (1, 1), "SAME")  # -> NCHW
+    if method == "sobel":
+        # Original implementation: two separate convolutions.
+        grad_x = jax.lax.conv(state_grid, kernel_x, (1, 1), "SAME")
+        grad_y = jax.lax.conv(state_grid, kernel_y, (1, 1), "SAME")
+    elif method == "sobel_fused":
+        # Concatenating output channels lets XLA use one convolution while
+        # preserving the exact feature ordering of the original path.
+        fused_kernel = jnp.concatenate([kernel_x, kernel_y], axis=0)
+        gradients = jax.lax.conv(state_grid, fused_kernel, (1, 1), "SAME")
+        channels = state_grid.shape[1]
+        grad_x, grad_y = gradients[:, :channels], gradients[:, channels:]
+    elif method == "sobel_second":
+        if kernel_xx is None or kernel_yy is None:
+            raise ValueError("sobel_second requires second-derivative kernels")
+        fused_kernel = jnp.concatenate(
+            [kernel_x, kernel_y, kernel_xx, kernel_yy], axis=0
+        )
+        derivatives = jax.lax.conv(state_grid, fused_kernel, (1, 1), "SAME")
+        channels = state_grid.shape[1]
+        grad_x = derivatives[:, :channels]
+        grad_y = derivatives[:, channels : 2 * channels]
+        grad_xx = derivatives[:, 2 * channels : 3 * channels]
+        grad_yy = derivatives[:, 3 * channels :]
+        return jnp.concatenate(
+            [state_grid, grad_x, grad_y, grad_xx, grad_yy], axis=1
+        )
+    elif method == "sobel_multiscale":
+        if kernel_x5 is None or kernel_y5 is None:
+            raise ValueError("sobel_multiscale requires 5x5 derivative kernels")
+        # Embed the 3x3 filters in the center of a 5x5 kernel so both scales
+        # can share one convolution call.
+        kernel_x3 = jnp.pad(kernel_x, ((0, 0), (0, 0), (1, 1), (1, 1)))
+        kernel_y3 = jnp.pad(kernel_y, ((0, 0), (0, 0), (1, 1), (1, 1)))
+        fused_kernel = jnp.concatenate(
+            [kernel_x3, kernel_y3, kernel_x5, kernel_y5], axis=0
+        )
+        derivatives = jax.lax.conv(state_grid, fused_kernel, (1, 1), "SAME")
+        channels = state_grid.shape[1]
+        return jnp.concatenate(
+            [
+                state_grid,
+                derivatives[:, :channels],
+                derivatives[:, channels : 2 * channels],
+                derivatives[:, 2 * channels : 3 * channels],
+                derivatives[:, 3 * channels :],
+            ],
+            axis=1,
+        )
+    else:
+        raise ValueError(f"Unsupported fixed perception method: {method}")
 
     # Concatenate the state grid with the gradients along the channel axis
     perceived_grid = jnp.concatenate([state_grid, grad_x, grad_y], axis=1)
@@ -82,6 +175,11 @@ def cell_update(
     kernel_x: jax.Array,
     kernel_y: jax.Array,
     update_prob: float = 0.5,
+    perception_method: str = "sobel",
+    kernel_xx: Optional[jax.Array] = None,
+    kernel_yy: Optional[jax.Array] = None,
+    kernel_x5: Optional[jax.Array] = None,
+    kernel_y5: Optional[jax.Array] = None,
 ) -> jnp.ndarray:
     """
     Cell update function to perform the update on the given state grid.
@@ -102,12 +200,24 @@ def cell_update(
     """
     pre_alive_mask = alive_masking(state_grid[:, 3, :, :])
 
-    perceived_grid = perceive(state_grid, kernel_x, kernel_y)
+    # Fixed perception operates on NCHW. Learned perception is a trainable
+    # model layer and receives the raw state in NHWC.
+    if perception_method == "learned":
+        model_input = jnp.transpose(state_grid, (0, 2, 3, 1))
+    else:
+        perceived_grid = perceive(
+            state_grid,
+            kernel_x,
+            kernel_y,
+            method=perception_method,
+            kernel_xx=kernel_xx,
+            kernel_yy=kernel_yy,
+            kernel_x5=kernel_x5,
+            kernel_y5=kernel_y5,
+        )
+        model_input = jnp.transpose(perceived_grid, (0, 2, 3, 1))
 
-    # Transpose: NCHW -> NHWC
-    perceived_grid = jnp.transpose(perceived_grid, (0, 2, 3, 1))
-
-    ds = model_fn.apply(params, perceived_grid)
+    ds = model_fn.apply(params, model_input)
 
     # Stochastic update
     rand_mask = jax.random.uniform(key, shape=ds.shape[:-1]) < update_prob
