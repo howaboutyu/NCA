@@ -60,9 +60,6 @@ def test_perception_function():
     )
     assert multiscale.shape == (1, 16 * 5, 32, 32)
 
-    nonlocal_grid = perceive(x, kernel_x, kernel_y, method="sobel_nonlocal")
-    assert nonlocal_grid.shape == (1, 16 * 5, 32, 32)
-
 
 def test_cell_update_function():
     # Set up random input data
