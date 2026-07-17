@@ -2,7 +2,13 @@ import jax
 import jax.numpy as jnp
 import tensorflow as tf
 import numpy as np
-from moviepy.editor import ImageSequenceClip  # type: ignore
+
+try:
+    # MoviePy 1.x exposed this from ``moviepy.editor``; MoviePy 2.x exports
+    # it from the package root.
+    from moviepy import ImageSequenceClip  # type: ignore
+except ImportError:  # pragma: no cover - exercised with MoviePy 1.x
+    from moviepy.editor import ImageSequenceClip  # type: ignore
 import tempfile
 from glob import glob
 import cv2  # type: ignore

@@ -46,6 +46,7 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
         (1, config.dimensions[0], config.dimensions[1], config.model_output_len * 3),
     )
 
+    restored_dict = None
     if config.weights_dir:
         restored_dict = checkpoints.restore_checkpoint(config.weights_dir, target=None)
 
@@ -167,7 +168,7 @@ def train_step(
     (loss, state_grid_sequence), grad = grad_fn(state.params, state_grid, key)
 
     if apply_grad:
-        grad = jax.tree_map(
+        grad = jax.tree_util.tree_map(
             lambda g: jnp.nan_to_num(g / (jnp.linalg.norm(g) + 1e-8)), grad
         )
         state = state.apply_gradients(grads=grad)

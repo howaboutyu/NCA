@@ -82,7 +82,7 @@ pytest
 To train the model run the following command
 
 ```bash
-python main.py --config configs/growing_nca.yaml 
+python main.py --config_path configs/growing_nca.yaml
 ``` 
 
 Configuration settings can be defined using YAML files. The default configuration file to reproduce the results mentioned in the paper can be found at `configs/growing_nca_with_damage.yaml`. For all the default configurations, please refer to nca/configs.py.
@@ -96,8 +96,7 @@ To perform inference on a trained model, execute the following command.
 
 
 ```bash
-python main.py --config_path=configs/growing_demo.yaml --mode=evaluate --output_video_path=demo.mp4
-2023
+python main.py --config_path=configs/growing_nca.yaml --mode=evaluate --output_video_path=demo.mp4
 ```
 
 Please ensure that you update the `weights_dir` field in the configuration file with the accurate path to the downloaded checkpoint. Additionally, specify the `output_video_path` to determine the location where the NCA propagation will be saved in video format.

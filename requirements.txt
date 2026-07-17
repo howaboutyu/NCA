@@ -1,5 +1,6 @@
 flax
 optax
+jax[cpu]
 black
 moviepy
 tensorboardX
