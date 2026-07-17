@@ -17,6 +17,7 @@ class NCAConfig:
     pokemon_targets: tuple = ()
     pokemon_embedding_dim: int = 32
     dynamic_class_token: bool = False
+    class_token_scale: float = 4.0
     # Initial living-cell pattern. ``single`` preserves the original seed;
     # ``random`` uses ``seed_density``; ``pokeball`` uses a compact RGBA icon.
     seed_pattern: str = "single"

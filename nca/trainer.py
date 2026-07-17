@@ -71,6 +71,7 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
         pokemon_vocab_size=len(config.pokemon_targets),
         pokemon_embedding_dim=config.pokemon_embedding_dim,
         dynamic_class_token=config.dynamic_class_token,
+        class_token_scale=config.class_token_scale,
     )
     dummy_data = jax.random.normal(
         jax.random.PRNGKey(0),
@@ -451,7 +452,9 @@ def train_and_evaluate(config: NCAConfig):
             )
 
             tb_writer.add_scalar("val_loss", np.asarray(loss), state.step)
-            tb_writer.add_image("target_img", np.asarray(train_target[0]), state.step)
+            tb_writer.add_image(
+                "target_img", np.asarray(targets_by_pokemon[0, 0]), state.step
+            )
 
             tb_state_grids = np.array(val_state_grids)
             tb_state_grids = np.clip(tb_state_grids, 0.0, 1.0)
@@ -465,7 +468,10 @@ def train_and_evaluate(config: NCAConfig):
                 "val_video", vid_tensor=tb_state_grids, fps=30, global_step=state.step
             )
 
-            val_state_grids = [NCHW_to_NHWC(grid) for grid in val_state_grids]
+            val_state_grids = [
+                np.clip(np.asarray(NCHW_to_NHWC(grid)), 0.0, 1.0)
+                for grid in val_state_grids
+            ]
             os.makedirs(config.validation_video_dir, exist_ok=True)
             output_video_file = os.path.join(config.validation_video_dir, f"{step}.mp4")
             make_video(val_state_grids, output_video_file)

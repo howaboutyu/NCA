@@ -233,7 +233,11 @@ def cell_update(
             class_token=class_token,
             method=model_fn.update_class_token,
         )
-        next_class_token = class_token + token_delta
+        next_class_token = model_fn.apply(
+            params,
+            class_token + token_delta,
+            method=model_fn.bound_class_token,
+        )
 
     # Stochastic update
     rand_mask = jax.random.uniform(key, shape=ds.shape[:-1]) < update_prob

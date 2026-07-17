@@ -7,6 +7,7 @@ nonlocal_connections: true
 nonlocal_mode: global
 pokemon_embedding_dim: 32
 dynamic_class_token: true
+class_token_scale: 4.0
 pokemon_targets:
   - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/bulbasaur.png"
   - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/charmander.png"
@@ -25,7 +26,7 @@ total_eval_steps: 300
 learning_rate: 0.0001
 n_damage: 1
 target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/dodrio.png"
-weights_dir: "runs/conditional_pokemon_global_batch8_fixed/checkpoints"
+weights_dir: "runs/conditional_pokemon_global_batch8_dynamic/checkpoints"
 checkpoint_dir: "runs/conditional_pokemon_global_batch8_dynamic/checkpoints"
 validation_video_dir: "runs/conditional_pokemon_global_batch8_dynamic/validation_videos"
 log_dir: "runs/conditional_pokemon_global_batch8_dynamic/logs"

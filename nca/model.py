@@ -14,6 +14,7 @@ class UpdateModel(nn.Module):
     pokemon_vocab_size: int = 0
     pokemon_embedding_dim: int = 32
     dynamic_class_token: bool = False
+    class_token_scale: float = 4.0
     kernel_init: Callable = nn.initializers.glorot_uniform
 
     def setup(self):
@@ -62,6 +63,10 @@ class UpdateModel(nn.Module):
     ) -> jnp.ndarray:
         pooled = jnp.mean(perception_vector, axis=(1, 2))
         return 0.05 * jnp.tanh(self.global_projection(pooled))
+    def bound_class_token(self, class_token: jnp.ndarray) -> jnp.ndarray:
+        scale = float(self.class_token_scale)
+        return scale * jnp.tanh(class_token / scale)
+
     def __call__(
         self,
         perception_vector: jnp.ndarray,
