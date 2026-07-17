@@ -1,9 +1,11 @@
 flax
 optax
-jax
+jax[cpu]
 black
 moviepy
 tensorboardX
 pytest
 opencv-python
-imageio>=2.29,<3
+imageio==2.27
+tensorflow
+keras_cv

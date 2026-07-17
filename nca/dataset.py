@@ -4,6 +4,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 import cv2  # type: ignore
+import tensorflow as tf  # type: ignore
 
 from nca.utils import NCHW_to_NHWC, NHWC_to_NCHW
 
