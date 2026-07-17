@@ -86,12 +86,15 @@ $$
 The 3×3 filters are zero-padded into the center of the 5×5 kernel before the
 fused convolution.
 
-A 20-step CPU smoke benchmark at 32×32 produced:
+A full CUDA benchmark at 56×56, batch size 8, 100 training steps, and 32 NCA
+steps per pass produced:
 
 | Method | Step time | Final MSE |
 | --- | ---: | ---: |
-| `sobel_second` | 137.82 ms | 0.1799 |
-| `sobel_multiscale` | 162.01 ms | 0.1689 |
+| `sobel_fused` | 9.87 ms | 0.1372 |
+| `sobel_second` | 8.25 ms | 0.0838 |
+| `sobel_multiscale` | 9.52 ms | 0.1171 |
+| `learned` | 9.78 ms | 0.1831 |
 
-This is only a smoke benchmark and is not directly comparable to the CUDA
-results above; a full CUDA run should be repeated when the GPU is available.
+The multi-scale mode improves accuracy over first-order Sobel, but remains
+slower and less accurate than the second-derivative mode in this run.
