@@ -49,6 +49,17 @@ Install the other dependencies with pip
 pip install -r requirements.txt
 ```
 
+For NVIDIA GPU training, use the CUDA 12 JAX extra instead:
+
+```bash
+make setup-gpu
+python -c "import jax; print(jax.devices())"
+python main.py --config_path configs/growing_nca.yaml
+```
+
+The device check should report a `CudaDevice`. The Dockerfile provides the same
+CUDA 12 setup for a containerized run.
+
 
 #### With GPU docker (recommended)
 

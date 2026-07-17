@@ -1,6 +1,5 @@
 import jax
 import jax.numpy as jnp
-import tensorflow as tf
 import numpy as np
 
 try:
@@ -16,7 +15,6 @@ import os
 
 from typing import List, Any, Union
 
-
 Array = Union[np.ndarray, jnp.ndarray]
 
 
@@ -31,10 +29,6 @@ def NCHW_to_NHWC(x: Array) -> Array:
     """
     if isinstance(x, np.ndarray):
         return np.transpose(x, (0, 2, 3, 1))
-    elif isinstance(x, tf.Tensor):
-        x_dl = tf.experimental.dlpack.to_dlpack(x)
-        x = jax.dlpack.from_dlpack(x_dl)
-
     return jnp.transpose(x, (0, 2, 3, 1))
 
 
@@ -49,10 +43,6 @@ def NHWC_to_NCHW(x: Array) -> Array:
     """
     if isinstance(x, np.ndarray):
         return np.transpose(x, (0, 3, 1, 2))
-    elif isinstance(x, tf.Tensor):
-        x_dl = tf.experimental.dlpack.to_dlpack(x)
-        x = jax.dlpack.from_dlpack(x_dl)
-
     return jnp.transpose(x, (0, 3, 1, 2))
 
 

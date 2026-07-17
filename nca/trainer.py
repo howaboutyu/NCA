@@ -10,7 +10,6 @@ from dataclasses import dataclass
 import cv2  # type: ignore
 import numpy as np
 from typing import Tuple, List, Dict, Any, Callable, Optional
-import tensorflow as tf  # type: ignore
 from tqdm import tqdm  # type: ignore
 import os
 from tensorboardX import SummaryWriter  # type: ignore
@@ -435,10 +434,10 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
     # NCHW -> NHWC
     rgb = jnp.transpose(rgb, (0, 2, 3, 1))
 
-    # resize with tf
-    rgb = tf.image.resize(
-        rgb, (256, 256), method=tf.image.ResizeMethod.NEAREST_NEIGHBOR
-    ).numpy()
+    # Resize through JAX so evaluation does not initialize a second GPU
+    # runtime (TensorFlow and JAX competing for the same CUDA context).
+    rgb = jax.image.resize(rgb, (rgb.shape[0], 256, 256, 3), method="nearest")
+    rgb = np.asarray(rgb)
 
     if output_video_path is None:
         make_video(rgb, config.evaluation_video_file)

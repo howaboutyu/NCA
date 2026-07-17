@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# NVIDIA CUDA 12 JAX plugin.  The NVIDIA driver supplies CUDA compatibility;
+# the CUDA libraries are installed into the Python environment by this extra.
+jax[cuda12]
