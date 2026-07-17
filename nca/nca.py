@@ -61,6 +61,28 @@ def create_second_derivative_kernels(
     return kernel_xx, kernel_yy
 
 
+def create_multiscale_perception_kernels(
+    input_size: int = 16, output_size: int = 16, use_oihw_layout: bool = True
+) -> tuple:
+    """Create 3x3 and 5x5 Sobel-like first-derivative kernels."""
+    smooth = jnp.array([1, 4, 6, 4, 1], dtype=jnp.float32)
+    derivative = jnp.array([-1, -2, 0, 2, 1], dtype=jnp.float32)
+    kernel_x = smooth[:, None] * derivative[None, :]
+    kernel_y = kernel_x.T
+    kernel_x = kernel_x[:, :, None, None] * jnp.ones(
+        (1, 1, input_size, output_size), dtype=jnp.float32
+    )
+    kernel_y = kernel_y[:, :, None, None] * jnp.ones(
+        (1, 1, input_size, output_size), dtype=jnp.float32
+    )
+
+    if use_oihw_layout:
+        kernel_x = jnp.transpose(kernel_x, (3, 2, 0, 1))
+        kernel_y = jnp.transpose(kernel_y, (3, 2, 0, 1))
+
+    return kernel_x / 32.0, kernel_y / 32.0
+
+
 def perceive(
     state_grid: jnp.ndarray,
     kernel_x: jnp.ndarray,
@@ -68,6 +90,8 @@ def perceive(
     method: str = "sobel",
     kernel_xx: Optional[jnp.ndarray] = None,
     kernel_yy: Optional[jnp.ndarray] = None,
+    kernel_x5: Optional[jnp.ndarray] = None,
+    kernel_y5: Optional[jnp.ndarray] = None,
 ) -> jnp.ndarray:
     """Perceive an input state grid using edge detection.
 
@@ -112,6 +136,28 @@ def perceive(
         return jnp.concatenate(
             [state_grid, grad_x, grad_y, grad_xx, grad_yy], axis=1
         )
+    elif method == "sobel_multiscale":
+        if kernel_x5 is None or kernel_y5 is None:
+            raise ValueError("sobel_multiscale requires 5x5 derivative kernels")
+        # Embed the 3x3 filters in the center of a 5x5 kernel so both scales
+        # can share one convolution call.
+        kernel_x3 = jnp.pad(kernel_x, ((0, 0), (0, 0), (1, 1), (1, 1)))
+        kernel_y3 = jnp.pad(kernel_y, ((0, 0), (0, 0), (1, 1), (1, 1)))
+        fused_kernel = jnp.concatenate(
+            [kernel_x3, kernel_y3, kernel_x5, kernel_y5], axis=0
+        )
+        derivatives = jax.lax.conv(state_grid, fused_kernel, (1, 1), "SAME")
+        channels = state_grid.shape[1]
+        return jnp.concatenate(
+            [
+                state_grid,
+                derivatives[:, :channels],
+                derivatives[:, channels : 2 * channels],
+                derivatives[:, 2 * channels : 3 * channels],
+                derivatives[:, 3 * channels :],
+            ],
+            axis=1,
+        )
     else:
         raise ValueError(f"Unsupported fixed perception method: {method}")
 
@@ -132,6 +178,8 @@ def cell_update(
     perception_method: str = "sobel",
     kernel_xx: Optional[jax.Array] = None,
     kernel_yy: Optional[jax.Array] = None,
+    kernel_x5: Optional[jax.Array] = None,
+    kernel_y5: Optional[jax.Array] = None,
 ) -> jnp.ndarray:
     """
     Cell update function to perform the update on the given state grid.
@@ -164,6 +212,8 @@ def cell_update(
             method=perception_method,
             kernel_xx=kernel_xx,
             kernel_yy=kernel_yy,
+            kernel_x5=kernel_x5,
+            kernel_y5=kernel_y5,
         )
         model_input = jnp.transpose(perceived_grid, (0, 2, 3, 1))
 

@@ -99,7 +99,13 @@ def main():
     parser.add_argument(
         "--methods",
         nargs="+",
-        default=["sobel", "sobel_fused", "sobel_second", "learned"],
+        default=[
+            "sobel",
+            "sobel_fused",
+            "sobel_second",
+            "sobel_multiscale",
+            "learned",
+        ],
     )
     args = parser.parse_args()
 

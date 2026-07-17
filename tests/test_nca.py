@@ -49,6 +49,17 @@ def test_perception_function():
     )
     assert second.shape == (1, 16 * 5, 32, 32)
 
+    kernel_x5, kernel_y5 = create_multiscale_perception_kernels(16, 16)
+    multiscale = perceive(
+        x,
+        kernel_x,
+        kernel_y,
+        method="sobel_multiscale",
+        kernel_x5=kernel_x5,
+        kernel_y5=kernel_y5,
+    )
+    assert multiscale.shape == (1, 16 * 5, 32, 32)
+
 
 def test_cell_update_function():
     # Set up random input data

@@ -19,6 +19,7 @@ from nca.model import UpdateModel
 from nca.nca import (
     create_perception_kernel,
     create_second_derivative_kernels,
+    create_multiscale_perception_kernels,
     cell_update,
 )
 from nca.config import NCAConfig
@@ -43,7 +44,13 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
     )
 
     # Initialize the model with random weights
-    valid_methods = {"sobel", "sobel_fused", "sobel_second", "learned"}
+    valid_methods = {
+        "sobel",
+        "sobel_fused",
+        "sobel_second",
+        "sobel_multiscale",
+        "learned",
+    }
     if config.perception_method not in valid_methods:
         raise ValueError(
             f"perception_method must be one of {sorted(valid_methods)}, "
@@ -62,7 +69,12 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
             config.model_output_len
             if config.perception_method == "learned"
             else config.model_output_len
-            * (5 if config.perception_method == "sobel_second" else 3),
+            * (
+                5
+                if config.perception_method
+                in {"sobel_second", "sobel_multiscale"}
+                else 3
+            ),
         ),
     )
 
@@ -113,6 +125,13 @@ def create_cell_update_fn(
             output_size=config.model_output_len,
             use_oihw_layout=True,
         )
+    kernel_x5 = kernel_y5 = None
+    if config.perception_method == "sobel_multiscale":
+        kernel_x5, kernel_y5 = create_multiscale_perception_kernels(
+            input_size=config.model_output_len,
+            output_size=config.model_output_len,
+            use_oihw_layout=True,
+        )
 
     # define a function to update the cell state grid using the provided model function and parameters
     def cell_update_fn(key, state_grid, params):
@@ -128,6 +147,8 @@ def create_cell_update_fn(
             perception_method=config.perception_method,
             kernel_xx=kernel_xx,
             kernel_yy=kernel_yy,
+            kernel_x5=kernel_x5,
+            kernel_y5=kernel_y5,
         )
 
     # if we want to use jit, then jit the cell_update_fn function

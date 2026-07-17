@@ -57,3 +57,41 @@ first-order gradients. In this run it was both faster and more accurate than
 the first-order variants. The learned 3×3 perception block is trainable and
 valid, but needs a longer or better matched training schedule before it is
 competitive on accuracy.
+
+## Multi-scale experiment
+
+The new `sobel_multiscale` mode combines centered 3×3 and 5×5 Sobel-like
+filters in one convolution:
+
+$$
+P_{\mathrm{multi}}(u) =
+\left[u,
+u_x^{(3)}, u_y^{(3)},
+u_x^{(5)}, u_y^{(5)}\right].
+$$
+
+The 5×5 derivative filters are constructed separably from
+
+$$
+s = [1,4,6,4,1], \qquad d = [-1,-2,0,2,1],
+$$
+
+with
+
+$$
+K_x^{(5)} = s^\mathsf{T}d,
+\qquad
+K_y^{(5)} = \left(K_x^{(5)}\right)^\mathsf{T}.
+$$
+The 3×3 filters are zero-padded into the center of the 5×5 kernel before the
+fused convolution.
+
+A 20-step CPU smoke benchmark at 32×32 produced:
+
+| Method | Step time | Final MSE |
+| --- | ---: | ---: |
+| `sobel_second` | 137.82 ms | 0.1799 |
+| `sobel_multiscale` | 162.01 ms | 0.1689 |
+
+This is only a smoke benchmark and is not directly comparable to the CUDA
+results above; a full CUDA run should be repeated when the GPU is available.
