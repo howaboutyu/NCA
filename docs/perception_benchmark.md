@@ -17,7 +17,7 @@ includes XLA compilation; steady-state timing excludes it.
 | `sobel_second` | 13.76 s | 8.73 ms | 0.0873381 |
 | `learned` | 15.21 s | 13.17 ms | 0.1830653 |
 
-For a state channel (u(x,y)), the first- and second-order derivatives are
+For a state channel \(u(x,y)\), the first- and second-order derivatives are
 
 $$
 u_x = \frac{\partial u}{\partial x}, \qquad
@@ -50,7 +50,7 @@ $$
 P(u) = \left[u,\; u_x,\; u_y,\; u_{xx},\; u_{yy}\right].
 $$
 
-For (C=16) state channels, this produces (5C=80) perception channels.
+For \(C=16\) state channels, this produces \(5C=80\) perception channels.
 `sobel_fused` computes the same X and Y Sobel features in one convolution.
 `sobel_second` gives the update network curvature information as well as
 first-order gradients. In this run it was both faster and more accurate than
