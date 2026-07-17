@@ -49,6 +49,7 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
         "sobel_fused",
         "sobel_second",
         "sobel_multiscale",
+        "sobel_nonlocal",
         "learned",
     }
     if config.perception_method not in valid_methods:
@@ -72,7 +73,7 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
             * (
                 5
                 if config.perception_method
-                in {"sobel_second", "sobel_multiscale"}
+                in {"sobel_second", "sobel_multiscale", "sobel_nonlocal"}
                 else 3
             ),
         ),

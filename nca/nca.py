@@ -158,6 +158,27 @@ def perceive(
             ],
             axis=1,
         )
+    elif method == "sobel_nonlocal":
+        # A dilated Sobel operator connects each cell to neighbors two pixels
+        # away, adding a wider-range signal without changing grid resolution.
+        local_gradients = jax.lax.conv(
+            state_grid,
+            jnp.concatenate([kernel_x, kernel_y], axis=0),
+            (1, 1),
+            "SAME",
+        )
+        nonlocal_gradients = jax.lax.conv_general_dilated(
+            state_grid,
+            jnp.concatenate([kernel_x, kernel_y], axis=0),
+            (1, 1),
+            "SAME",
+            rhs_dilation=(2, 2),
+            dimension_numbers=("NCHW", "OIHW", "NCHW"),
+        )
+        channels = state_grid.shape[1]
+        return jnp.concatenate(
+            [state_grid, local_gradients, nonlocal_gradients], axis=1
+        )
     else:
         raise ValueError(f"Unsupported fixed perception method: {method}")
 

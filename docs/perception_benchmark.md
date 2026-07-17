@@ -98,3 +98,26 @@ steps per pass produced:
 
 The multi-scale mode improves accuracy over first-order Sobel, but remains
 slower and less accurate than the second-derivative mode in this run.
+
+## Non-local experiment
+
+The `sobel_nonlocal` mode concatenates ordinary Sobel gradients with gradients
+from a dilation-2 Sobel operator:
+
+$$
+P_{\mathrm{nonlocal}}(u) =
+\left[u,; u_x^{(1)},; u_y^{(1)},
+u_x^{(2)},\; u_y^{(2)}\right].
+$$
+
+The dilation-2 filters sample the neighborhood at offsets two cells away,
+giving each update access to a wider spatial radius without changing the grid
+resolution. A 20-step CPU smoke benchmark at 32×32 produced:
+
+| Method | Step time | Final MSE |
+| --- | ---: | ---: |
+| `sobel_second` | 136.28 ms | 0.1799 |
+| `sobel_nonlocal` | 144.35 ms | 0.1818 |
+
+This is a CPU smoke result; a full CUDA benchmark is still needed for the
+non-local path.

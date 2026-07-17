@@ -104,6 +104,7 @@ def main():
             "sobel_fused",
             "sobel_second",
             "sobel_multiscale",
+            "sobel_nonlocal",
             "learned",
         ],
     )
