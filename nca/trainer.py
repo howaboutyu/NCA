@@ -70,6 +70,7 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
         nonlocal_attention_dim=config.nonlocal_attention_dim,
         pokemon_vocab_size=len(config.pokemon_targets),
         pokemon_embedding_dim=config.pokemon_embedding_dim,
+        dynamic_class_token=config.dynamic_class_token,
     )
     dummy_data = jax.random.normal(
         jax.random.PRNGKey(0),
@@ -149,7 +150,7 @@ def create_cell_update_fn(
         )
 
     # define a function to update the cell state grid using the provided model function and parameters
-    def cell_update_fn(key, state_grid, params, pokemon_ids=None):
+    def cell_update_fn(key, state_grid, params, pokemon_ids=None, class_token=None):
         # call the cell_update function with the provided inputs and the perception kernels
         return cell_update(
             key=key,
@@ -165,13 +166,23 @@ def create_cell_update_fn(
             kernel_x5=kernel_x5,
             kernel_y5=kernel_y5,
             pokemon_ids=pokemon_ids,
+            class_token=class_token,
         )
 
     # if we want to use jit, then jit the cell_update_fn function
-    if use_jit:
+    if use_jit and not config.dynamic_class_token:
         cell_update_fn = jax.jit(cell_update_fn)
 
     # return the cell_update_fn function
+    def init_class_token(params, pokemon_ids):
+        if not config.pokemon_targets:
+            return None
+        return model_fn.apply(
+            params, pokemon_ids, method=model_fn.initial_class_token
+        )
+
+    cell_update_fn.init_class_token = init_class_token
+
     return cell_update_fn
 
 
@@ -182,11 +193,16 @@ def nca_looper(
     num_nca_steps: int,
     cell_update_fn: Callable,
     pokemon_ids: Optional[Array] = None,
+    class_token: Optional[Array] = None,
 ) -> Tuple[Array, Array]:
     state_grid_sequence = []
     for _ in range(num_nca_steps):
         _, key = jax.random.split(key)
-        state_grid = cell_update_fn(key, state_grid, params, pokemon_ids)
+        result = cell_update_fn(key, state_grid, params, pokemon_ids, class_token)
+        if isinstance(result, tuple):
+            state_grid, class_token = result
+        else:
+            state_grid = result
         state_grid_sequence.append(state_grid)
 
     pred_rgba = state_grid[:, :4]
@@ -230,6 +246,11 @@ def train_step(
             num_nca_steps=num_nca_steps,
             cell_update_fn=cell_update_fn,
             pokemon_ids=pokemon_ids,
+            class_token=(
+                cell_update_fn.init_class_token(params, pokemon_ids)
+                if pokemon_ids is not None
+                else None
+            ),
         )
 
         # used for visualizing the state grid during training
@@ -280,6 +301,11 @@ def evaluate_step(
         num_nca_steps=num_nca_steps,
         cell_update_fn=cell_update_fn,
         pokemon_ids=pokemon_ids,
+        class_token=(
+            cell_update_fn.init_class_token(state.params, pokemon_ids)
+            if pokemon_ids is not None
+            else None
+        ),
     )
 
     loss_value = mse(pred_rgba, target, reduce_loss)

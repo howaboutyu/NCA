@@ -13,6 +13,7 @@ class UpdateModel(nn.Module):
     nonlocal_attention_dim: int = 32
     pokemon_vocab_size: int = 0
     pokemon_embedding_dim: int = 32
+    dynamic_class_token: bool = False
     kernel_init: Callable = nn.initializers.glorot_uniform
 
     def setup(self):
@@ -53,8 +54,19 @@ class UpdateModel(nn.Module):
             kernel_init=nn.initializers.zeros,
         )
 
+    def initial_class_token(self, pokemon_ids: jnp.ndarray) -> jnp.ndarray:
+        return self.pokemon_embedding(pokemon_ids)
+
+    def update_class_token(
+        self, perception_vector: jnp.ndarray, class_token: jnp.ndarray
+    ) -> jnp.ndarray:
+        pooled = jnp.mean(perception_vector, axis=(1, 2))
+        return 0.05 * jnp.tanh(self.global_projection(pooled))
     def __call__(
-        self, perception_vector: jnp.ndarray, pokemon_ids: jnp.ndarray | None = None
+        self,
+        perception_vector: jnp.ndarray,
+        pokemon_ids: jnp.ndarray | None = None,
+        class_token: jnp.ndarray | None = None,
     ) -> jnp.ndarray:
         """Apply the model to an input tensor.
 
@@ -104,7 +116,11 @@ class UpdateModel(nn.Module):
         if self.pokemon_vocab_size > 0:
             if pokemon_ids is None:
                 raise ValueError("pokemon_ids are required for conditional models")
-            embedding = self.pokemon_embedding(pokemon_ids)
+            embedding = (
+                class_token
+                if class_token is not None
+                else self.pokemon_embedding(pokemon_ids)
+            )
             embedding = embedding[:, None, None, :]
             embedding = jnp.broadcast_to(
                 embedding,
