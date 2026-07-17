@@ -21,6 +21,9 @@ class NCAConfig:
     log_every: int = 500
     num_nca_steps: int = 64  # number of steps to run NCA for
     n_damage: int = 3  # number of states in a batch to damage
+    # Kept for compatibility with older YAML files.  New configurations
+    # should use ``n_damage`` to control damage augmentation.
+    damage: bool = False
 
     # evaluation parameters
     total_eval_steps: int = 300

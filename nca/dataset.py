@@ -5,7 +5,6 @@ import jax
 import jax.numpy as jnp
 import cv2  # type: ignore
 import tensorflow as tf  # type: ignore
-import keras_cv
 
 from nca.utils import NCHW_to_NHWC, NHWC_to_NCHW
 
@@ -86,28 +85,29 @@ class NCADataGenerator:
         width_factor: float = 0.1,
         seed: int = 10,
     ):
-        img_nhwc = NCHW_to_NHWC(img_nchw)
-        img_nhwc = keras_cv.layers.RandomCutout(height_factor, width_factor, seed=seed)(
-            img_nhwc
-        )
-
-        img_nchw = NHWC_to_NCHW(img_nhwc)
-
-        return img_nchw
+        # Keep augmentation in NumPy.  The previous KerasCV implementation
+        # unconditionally used TensorFlow device kernels, which fails on
+        # machines whose installed CUDA PTX does not match the GPU.
+        img = np.asarray(NCHW_to_NHWC(img_nchw)).copy()
+        rng = np.random.default_rng(seed)
+        n, h, w, _ = img.shape
+        cutout_h = max(1, int(round(h * height_factor)))
+        cutout_w = max(1, int(round(w * width_factor)))
+        for i in range(n):
+            y = rng.integers(0, max(1, h - cutout_h + 1))
+            x = rng.integers(0, max(1, w - cutout_w + 1))
+            img[i, y : y + cutout_h, x : x + cutout_w, :] = 0
+        return NHWC_to_NCHW(img)
 
     @staticmethod
     def random_cutout_circle(img_nchw: Array, seed: int):
-        img_nhwc = NCHW_to_NHWC(img_nchw)
-
-        n, h, w, _ = img_nhwc.shape
-
-        x = tf.linspace(-1.0, 1.0, w)[None, None, :]
-        y = tf.linspace(-1.0, 1.0, h)[None, :, None]
-        center = tf.random.uniform([2, n, 1, 1], -0.5, 0.5, seed=seed)
-        r = tf.random.uniform([n, 1, 1], 0.05, 0.2, seed=seed)
-        x, y = (x - center[0]) / r, (y - center[1]) / r
-        mask: tf.Tensor = tf.cast(x * x + y * y < 1.0, tf.float32)
-        img_masked = img_nhwc * (1.0 - mask[..., tf.newaxis])
-        img_masked = np.asarray(img_masked)
-        img_masked_nchw = NHWC_to_NCHW(img_masked)
-        return img_masked_nchw
+        img = np.asarray(NCHW_to_NHWC(img_nchw)).copy()
+        n, h, w, _ = img.shape
+        rng = np.random.default_rng(seed)
+        yy, xx = np.mgrid[-1 : 1 : complex(0, h), -1 : 1 : complex(0, w)]
+        for i in range(n):
+            cx, cy = rng.uniform(-0.5, 0.5, size=2)
+            radius = rng.uniform(0.05, 0.2)
+            mask = ((xx - cx) / radius) ** 2 + ((yy - cy) / radius) ** 2 < 1.0
+            img[i][mask] = 0
+        return NHWC_to_NCHW(img)
