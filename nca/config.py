@@ -6,6 +6,10 @@ import yaml  # type: ignore
 class NCAConfig:
     dimensions: tuple = (56, 56)
     model_output_len: int = 16
+    # ``sobel`` is the original implementation. ``sobel_fused`` computes the
+    # same features with one convolution, ``sobel_second`` adds second
+    # derivatives, while ``learned`` trains a 3x3 perception convolution.
+    perception_method: str = "sobel"
     batch_size: int = 16
     total_training_steps: int = 100000
     eval_every: int = 500

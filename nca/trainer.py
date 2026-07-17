@@ -16,7 +16,11 @@ from tensorboardX import SummaryWriter  # type: ignore
 from functools import partial
 
 from nca.model import UpdateModel
-from nca.nca import create_perception_kernel, cell_update
+from nca.nca import (
+    create_perception_kernel,
+    create_second_derivative_kernels,
+    cell_update,
+)
 from nca.config import NCAConfig
 from nca.dataset import NCADataGenerator
 from nca.utils import make_video, NCHW_to_NHWC, mse
@@ -39,10 +43,27 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
     )
 
     # Initialize the model with random weights
-    model = UpdateModel(model_output_len=config.model_output_len)
+    valid_methods = {"sobel", "sobel_fused", "sobel_second", "learned"}
+    if config.perception_method not in valid_methods:
+        raise ValueError(
+            f"perception_method must be one of {sorted(valid_methods)}, "
+            f"got {config.perception_method!r}"
+        )
+    model = UpdateModel(
+        model_output_len=config.model_output_len,
+        perception_method=config.perception_method,
+    )
     dummy_data = jax.random.normal(
         jax.random.PRNGKey(0),
-        (1, config.dimensions[0], config.dimensions[1], config.model_output_len * 3),
+        (
+            1,
+            config.dimensions[0],
+            config.dimensions[1],
+            config.model_output_len
+            if config.perception_method == "learned"
+            else config.model_output_len
+            * (5 if config.perception_method == "sobel_second" else 3),
+        ),
     )
 
     restored_dict = None
@@ -85,6 +106,13 @@ def create_cell_update_fn(
         output_size=config.model_output_len,
         use_oihw_layout=True,
     )
+    kernel_xx = kernel_yy = None
+    if config.perception_method == "sobel_second":
+        kernel_xx, kernel_yy = create_second_derivative_kernels(
+            input_size=config.model_output_len,
+            output_size=config.model_output_len,
+            use_oihw_layout=True,
+        )
 
     # define a function to update the cell state grid using the provided model function and parameters
     def cell_update_fn(key, state_grid, params):
@@ -97,6 +125,9 @@ def create_cell_update_fn(
             kernel_x=kernel_x,
             kernel_y=kernel_y,
             update_prob=config.stochastic_update_prob,
+            perception_method=config.perception_method,
+            kernel_xx=kernel_xx,
+            kernel_yy=kernel_yy,
         )
 
     # if we want to use jit, then jit the cell_update_fn function

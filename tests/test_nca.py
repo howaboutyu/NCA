@@ -35,6 +35,20 @@ def test_perception_function():
 
     assert y.shape == (1, 16 * 3, 32, 32)
 
+    fused = perceive(x, kernel_x, kernel_y, method="sobel_fused")
+    np.testing.assert_allclose(y, fused)
+
+    kernel_xx, kernel_yy = create_second_derivative_kernels(16, 16)
+    second = perceive(
+        x,
+        kernel_x,
+        kernel_y,
+        method="sobel_second",
+        kernel_xx=kernel_xx,
+        kernel_yy=kernel_yy,
+    )
+    assert second.shape == (1, 16 * 5, 32, 32)
+
 
 def test_cell_update_function():
     # Set up random input data
@@ -56,3 +70,22 @@ def test_cell_update_function():
     y = cell_update(key, x, model, params, kernel_x, kernel_y, update_prob=0.5)
 
     assert y.shape == (4, 16, 32, 32)
+
+
+def test_learned_perception_cell_update():
+    key = random.PRNGKey(0)
+    x = random.normal(key, (4, 16, 32, 32))
+    model = UpdateModel(perception_method="learned")
+    params = model.init(key, random.normal(key, (1, 32, 32, 16)))
+    kernel_x, kernel_y = create_perception_kernel(16, 16, use_oihw_layout=True)
+    y = cell_update(
+        key,
+        x,
+        model,
+        params,
+        kernel_x,
+        kernel_y,
+        update_prob=0.5,
+        perception_method="learned",
+    )
+    assert y.shape == x.shape

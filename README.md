@@ -100,6 +100,12 @@ Configuration settings can be defined using YAML files. The default configuratio
 
 To specify your own target image, you can modify the `target_filename` field in the YAML file to the desired image filename. Please ensure that the image has an alpha channel.
 
+Select the perception implementation with `perception_method`: `sobel` (the original two-convolution path), `sobel_fused` (an equivalent fused convolution), `sobel_second` (adds second derivatives), or `learned` (a trainable 3x3 convolutional perception block). Compare them with:
+
+```bash
+python scripts/benchmark_perception.py --steps 100 --nca-steps 32
+```
+
 
 ### Inference
 
