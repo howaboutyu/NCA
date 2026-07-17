@@ -106,7 +106,7 @@ from a dilation-2 Sobel operator:
 
 $$
 P_{\mathrm{nonlocal}}(u) =
-\left[u,; u_x^{(1)},; u_y^{(1)},
+\left[u,\; u_x^{(1)},\; u_y^{(1)},
 u_x^{(2)},\; u_y^{(2)}\right].
 $$
 
@@ -121,3 +121,31 @@ resolution. A 20-step CPU smoke benchmark at 32×32 produced:
 
 This is a CPU smoke result; a full CUDA benchmark is still needed for the
 non-local path.
+
+## Global non-local connection experiment
+
+The architecture-level non-local branch is enabled with
+`nonlocal_connections: true`. It computes a global summary of the local
+perception and broadcasts a learned projection back to every cell:
+
+$$
+g = \frac{1}{HW}\sum_{i=1}^{H}\sum_{j=1}^{W} p_{ij},
+\qquad
+z_{ij} = \left[p_{ij},\; \phi(g)\right],
+$$
+
+where \(p_{ij}\) is the local perception at cell \((i,j)\), and
+\(\phi: \mathbb{R}^{C}\rightarrow\mathbb{R}^{32}\) is a learned dense
+projection. Thus every cell receives information derived from the entire grid.
+This is the intended brain-like long-range experiment; `sobel_nonlocal` is a
+separate dilated-convolution experiment.
+
+20-step CPU smoke benchmark at 32×32:
+
+| Method | Step time | Final MSE |
+| --- | ---: | ---: |
+| `sobel_second` | 151.66 ms | 0.1799 |
+| `global_context` | 157.58 ms | 0.1914 |
+
+The global branch is functional, but this short run does not yet show an
+accuracy benefit. A full CUDA training run is needed for a stronger comparison.

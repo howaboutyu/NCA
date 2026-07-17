@@ -60,6 +60,7 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
     model = UpdateModel(
         model_output_len=config.model_output_len,
         perception_method=config.perception_method,
+        nonlocal_connections=config.nonlocal_connections,
     )
     dummy_data = jax.random.normal(
         jax.random.PRNGKey(0),

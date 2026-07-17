@@ -10,6 +10,7 @@ class NCAConfig:
     # same features with one convolution, ``sobel_second`` adds second
     # derivatives, while ``learned`` trains a 3x3 perception convolution.
     perception_method: str = "sobel"
+    nonlocal_connections: bool = False
     # Fraction of grid cells initialized as living cells. Zero preserves the
     # original single-cell center seed.
     seed_density: float = 0.0
