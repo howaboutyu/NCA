@@ -16,16 +16,30 @@ class NCADataGenerator:
     batch_size: int
     dimensions: Tuple[Any, ...]
     model_output_len: int
+    seed_density: float = 0.0
+    seed_random_seed: int = 0
     seed_state: np.ndarray = field(init=False)
     pool: np.ndarray = field(init=False)
 
     def __post_init__(self):
+        if not 0.0 <= self.seed_density <= 1.0:
+            raise ValueError("seed_density must be between 0.0 and 1.0")
         self.seed_state = np.zeros(
             (self.model_output_len, self.dimensions[0], self.dimensions[1])
         )
 
-        # set chemical channels 1, at the center of the grid
-        self.seed_state[3:, self.dimensions[0] // 2, self.dimensions[1] // 2] = 1.0
+        if self.seed_density == 0.0:
+            # Original single-cell center seed.
+            self.seed_state[
+                3:, self.dimensions[0] // 2, self.dimensions[1] // 2
+            ] = 1.0
+        else:
+            rng = np.random.default_rng(self.seed_random_seed)
+            alive = rng.random(self.dimensions) < self.seed_density
+            # Keep the seed usable even for very small grids/densities.
+            if not np.any(alive):
+                alive[self.dimensions[0] // 2, self.dimensions[1] // 2] = True
+            self.seed_state[3:, alive] = 1.0
 
         self.pool = np.asarray([self.seed_state] * self.pool_size)
 

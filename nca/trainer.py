@@ -283,6 +283,8 @@ def train_and_evaluate(config: NCAConfig):
         batch_size=config.batch_size,
         dimensions=config.dimensions,
         model_output_len=config.model_output_len,
+        seed_density=config.seed_density,
+        seed_random_seed=config.seed_random_seed,
     )
 
     train_target = dataset_generator.get_target(config.target_filename)
@@ -439,6 +441,8 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
         batch_size=config.batch_size,
         dimensions=config.dimensions,
         model_output_len=config.model_output_len,
+        seed_density=config.seed_density,
+        seed_random_seed=config.seed_random_seed,
     )
 
     nca_looper_fn = partial(

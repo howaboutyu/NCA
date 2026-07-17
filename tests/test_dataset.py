@@ -15,6 +15,15 @@ def test_initialization(generator: NCADataGenerator):
     assert generator.pool.shape == (100, 16, 40, 40)
 
 
+def test_random_seed_distribution():
+    generator = NCADataGenerator(
+        2, 1, (40, 40), 16, seed_density=0.2, seed_random_seed=0
+    )
+    alive = generator.seed_state[3] > 0
+    assert 0.15 < alive.mean() < 0.25
+    np.testing.assert_array_equal(alive, generator.seed_state[4] > 0)
+
+
 def test_sample_generation(generator: NCADataGenerator):
     key = jax.random.PRNGKey(0)
 
