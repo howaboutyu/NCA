@@ -347,6 +347,7 @@ def train_and_evaluate(config: NCAConfig):
         state_grids_ranked = state_grids[loss_rank]
         target_ranked = train_target[loss_rank]
         pokemon_ids_ranked = pokemon_ids[loss_rank]
+        pool_indices_ranked = state_grid_indices[loss_rank]
 
         # set the worst performing batch to the seed state
         state_grids_ranked[:1] = dataset_generator.seed_state
@@ -368,6 +369,7 @@ def train_and_evaluate(config: NCAConfig):
         state_grids_ranked = state_grids_ranked[shuffled_idx]
         target_ranked = target_ranked[shuffled_idx]
         pokemon_ids_ranked = pokemon_ids_ranked[shuffled_idx]
+        pool_indices_shuffled = pool_indices_ranked[shuffled_idx]
 
         (
             state,
@@ -383,7 +385,7 @@ def train_and_evaluate(config: NCAConfig):
 
         # replace the pool with final state grid
         final_training_grid = np.squeeze(training_grid_array[-1])
-        dataset_generator.update_pool(state_grid_indices, final_training_grid)
+        dataset_generator.update_pool(pool_indices_shuffled, final_training_grid)
         print(f"training_grid_array min: {jnp.min(training_grid_array)}")
         print(f"training_grid_array max: {jnp.max(training_grid_array)}")
         print(f"state_grid_indices: {state_grid_indices}")
