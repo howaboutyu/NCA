@@ -386,7 +386,7 @@ def make_connection_overlay_video(
     filename: str,
     cell_stride: int = 4,
     fps: int = 10,
-) -> None:
+) -> np.ndarray:
     """Render evolving moving edges over an NHWC evaluation sequence."""
     rendered = []
     positions = np.asarray(edge_positions)[:, 0]
@@ -434,6 +434,7 @@ def make_connection_overlay_video(
             / 255.0
         )
     make_video(rendered, filename, fps=fps)
+    return np.asarray(rendered)
 
 
 def train_and_evaluate(config: NCAConfig):
@@ -623,11 +624,20 @@ def train_and_evaluate(config: NCAConfig):
                 connection_video_file = os.path.join(
                     config.validation_video_dir, f"{step}_connections.mp4"
                 )
-                make_connection_overlay_video(
+                connection_frames = make_connection_overlay_video(
                     val_state_grids,
                     np.asarray(edge_positions),
                     connection_video_file,
                     cell_stride=config.edge_visualization_stride,
+                )
+                connection_tensor = np.transpose(
+                    connection_frames[np.newaxis, ...], (0, 1, 4, 2, 3)
+                )
+                tb_writer.add_video(
+                    "val_connections_video",
+                    vid_tensor=connection_tensor,
+                    fps=30,
+                    global_step=state.step,
                 )
 
         if step % config.checkpoint_every == 0 and config.checkpoint_dir:
