@@ -16,7 +16,7 @@ seed_pattern: pokeball
 seed_size: 11
 seed_density: 0.0
 seed_random_seed: 0
-stochastic_update_prob: 0.25
+stochastic_update_prob: 0.5
 batch_size: 8
 pool_size: 1000
 total_training_steps: 100000
@@ -26,10 +26,10 @@ learning_rate: 0.0001
 n_damage: 1
 target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/dodrio.png"
 weights_dir: ""
-checkpoint_dir: "runs/conditional_pokemon_global_batch8_static_only_random25/checkpoints"
-validation_video_dir: "runs/conditional_pokemon_global_batch8_static_only_random25/validation_videos"
-log_dir: "runs/conditional_pokemon_global_batch8_static_only_random25/logs"
-evaluation_video_file: "runs/conditional_pokemon_global_batch8_static_only_random25/evaluation.mp4"
+checkpoint_dir: "runs/conditional_pokemon_global_batch8_static_only_random50/checkpoints"
+validation_video_dir: "runs/conditional_pokemon_global_batch8_static_only_random50/validation_videos"
+log_dir: "runs/conditional_pokemon_global_batch8_static_only_random50/logs"
+evaluation_video_file: "runs/conditional_pokemon_global_batch8_static_only_random50/evaluation.mp4"
 checkpoint_every: 500
 eval_every: 500
 log_every: 500
