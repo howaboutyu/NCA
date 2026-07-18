@@ -238,7 +238,7 @@ def nca_looper(
         edge_velocity = jnp.zeros_like(edge_pos)
         edge_state = jnp.zeros(
             (batch, height, width, edge_count, edge_state_dim),
-            dtype=state_grid.dtype,
+            dtype=jnp.float32,
         )
     state_grid_sequence = []
     edge_position_sequence = []
@@ -391,6 +391,7 @@ def make_connection_overlay_video(
     rendered = []
     positions = np.asarray(edge_positions)[:, 0]
     for image, frame_positions in zip(images, positions):
+        image = np.squeeze(np.asarray(image))
         base = np.asarray(image[..., :3] * 255.0, dtype=np.uint8)
         height, width = base.shape[:2]
         scale = 4
