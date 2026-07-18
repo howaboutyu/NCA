@@ -304,6 +304,7 @@ def train_and_evaluate(config: NCAConfig):
         dimensions=config.dimensions,
         model_output_len=config.model_output_len,
         seed_density=config.seed_density,
+        seed_noise_density=config.seed_noise_density,
         seed_random_seed=config.seed_random_seed,
         seed_pattern=config.seed_pattern,
         seed_size=config.seed_size,

@@ -23,6 +23,8 @@ class NCAConfig:
     # Fraction of grid cells initialized as living cells. Zero preserves the
     # original single-cell center seed.
     seed_density: float = 0.0
+    # For a Poké Ball seed, optionally add random live cells around the icon.
+    seed_noise_density: float = 0.0
     seed_random_seed: int = 0
     batch_size: int = 16
     total_training_steps: int = 100000

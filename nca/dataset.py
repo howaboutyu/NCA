@@ -18,6 +18,7 @@ class NCADataGenerator:
     dimensions: Tuple[Any, ...]
     model_output_len: int
     seed_density: float = 0.0
+    seed_noise_density: float = 0.0
     seed_random_seed: int = 0
     seed_pattern: str = "single"
     seed_size: int = 11
@@ -29,6 +30,8 @@ class NCADataGenerator:
     def __post_init__(self):
         if not 0.0 <= self.seed_density <= 1.0:
             raise ValueError("seed_density must be between 0.0 and 1.0")
+        if not 0.0 <= self.seed_noise_density <= 1.0:
+            raise ValueError("seed_noise_density must be between 0.0 and 1.0")
         if self.seed_pattern not in {"single", "random", "pokeball"}:
             raise ValueError("seed_pattern must be 'single', 'random', or 'pokeball'")
         if self.seed_size < 3 or self.seed_size % 2 == 0:
@@ -51,6 +54,16 @@ class NCADataGenerator:
             if not np.any(alive):
                 alive[self.dimensions[0] // 2, self.dimensions[1] // 2] = True
             self.seed_state[3:, alive] = 1.0
+
+        if self.seed_noise_density > 0.0:
+            rng = np.random.default_rng(self.seed_random_seed)
+            noise_mask = rng.random(self.dimensions) < self.seed_noise_density
+            # Preserve the Poké Ball itself; add noise around it.
+            noise_mask &= self.seed_state[3] <= 0.0
+            self.seed_state[:3, noise_mask] = rng.random(
+                (3, int(np.count_nonzero(noise_mask)))
+            )
+            self.seed_state[3:, noise_mask] = 1.0
 
         self.pool = np.asarray([self.seed_state] * self.pool_size)
         self.pokemon_targets = tuple(self.pokemon_targets)
