@@ -14,6 +14,12 @@ class NCAConfig:
     nonlocal_mode: str = "global"
     nonlocal_token_grid: int = 8
     nonlocal_attention_dim: int = 32
+    # Optional differentiable moving-edge communication.
+    edge_count: int = 4
+    edge_state_dim: int = 16
+    edge_momentum: float = 0.9
+    edge_step_size: float = 0.05
+    edge_state_step_size: float = 0.05
     pokemon_targets: tuple = ()
     pokemon_embedding_dim: int = 32
     # Initial living-cell pattern. ``single`` preserves the original seed;

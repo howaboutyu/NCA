@@ -181,6 +181,9 @@ def cell_update(
     kernel_x5: Optional[jax.Array] = None,
     kernel_y5: Optional[jax.Array] = None,
     pokemon_ids: Optional[jax.Array] = None,
+    edge_pos: Optional[jax.Array] = None,
+    edge_velocity: Optional[jax.Array] = None,
+    edge_state: Optional[jax.Array] = None,
 ) -> jnp.ndarray:
     """
     Cell update function to perform the update on the given state grid.
@@ -218,7 +221,19 @@ def cell_update(
         )
         model_input = jnp.transpose(perceived_grid, (0, 2, 3, 1))
 
-    ds = model_fn.apply(params, model_input, pokemon_ids=pokemon_ids)
+    model_output = model_fn.apply(
+        params,
+        model_input,
+        pokemon_ids=pokemon_ids,
+        state_grid=state_grid,
+        edge_pos=edge_pos,
+        edge_velocity=edge_velocity,
+        edge_state=edge_state,
+    )
+    if edge_pos is not None:
+        ds, next_edge_pos, next_edge_velocity, next_edge_state = model_output
+    else:
+        ds = model_output
 
     # Stochastic update
     rand_mask = jax.random.uniform(key, shape=ds.shape[:-1]) < update_prob
@@ -237,6 +252,13 @@ def cell_update(
 
     state_grid = alive_mask.astype(jnp.float32) * state_grid
 
+    if edge_pos is not None:
+        return (
+            state_grid,
+            next_edge_pos,
+            next_edge_velocity,
+            next_edge_state,
+        )
     return state_grid
 
 

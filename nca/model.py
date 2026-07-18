@@ -4,6 +4,46 @@ import flax.linen as nn
 from typing import Callable
 
 
+def sample_continuous_edges(
+    state: jnp.ndarray, edge_pos: jnp.ndarray
+) -> jnp.ndarray:
+    """Bilinearly sample an NHWC state at normalized edge coordinates.
+
+    Args:
+        state: State with shape ``(B, H, W, C)``.
+        edge_pos: Coordinates with shape ``(B, H, W, K, 2)`` in ``[-1, 1]``;
+            the last dimension is ``(x, y)``.
+    Returns:
+        Samples with shape ``(B, H, W, K, C)``.
+    """
+    batch, height, width, _ = state.shape
+    x = (edge_pos[..., 0] + 1.0) * (width - 1) / 2.0
+    y = (edge_pos[..., 1] + 1.0) * (height - 1) / 2.0
+    x = jnp.clip(x, 0.0, width - 1.0)
+    y = jnp.clip(y, 0.0, height - 1.0)
+
+    x0 = jnp.floor(x).astype(jnp.int32)
+    y0 = jnp.floor(y).astype(jnp.int32)
+    x1 = jnp.minimum(x0 + 1, width - 1)
+    y1 = jnp.minimum(y0 + 1, height - 1)
+    wx = x - x0
+    wy = y - y0
+    batch_idx = jnp.arange(batch)[:, None, None, None]
+
+    top_left = state[batch_idx, y0, x0]
+    top_right = state[batch_idx, y0, x1]
+    bottom_left = state[batch_idx, y1, x0]
+    bottom_right = state[batch_idx, y1, x1]
+    wx = wx[..., None]
+    wy = wy[..., None]
+    return (
+        (1.0 - wx) * (1.0 - wy) * top_left
+        + wx * (1.0 - wy) * top_right
+        + (1.0 - wx) * wy * bottom_left
+        + wx * wy * bottom_right
+    )
+
+
 class UpdateModel(nn.Module):
     model_output_len: int = 16
     perception_method: str = "sobel"
@@ -11,6 +51,11 @@ class UpdateModel(nn.Module):
     nonlocal_mode: str = "global"
     nonlocal_token_grid: int = 8
     nonlocal_attention_dim: int = 32
+    edge_count: int = 4
+    edge_state_dim: int = 16
+    edge_momentum: float = 0.9
+    edge_step_size: float = 0.05
+    edge_state_step_size: float = 0.05
     pokemon_vocab_size: int = 0
     pokemon_embedding_dim: int = 32
     kernel_init: Callable = nn.initializers.glorot_uniform
@@ -32,6 +77,14 @@ class UpdateModel(nn.Module):
                 self.context_gate = nn.Dense(
                     1,
                     bias_init=nn.initializers.constant(-4.0),
+                )
+            elif self.nonlocal_mode == "moving_edges":
+                self.edge_net = nn.Sequential(
+                    [
+                        nn.Dense(64),
+                        nn.relu,
+                        nn.Dense(self.edge_state_dim + 2),
+                    ]
                 )
             else:
                 self.global_projection = nn.Dense(32)
@@ -57,6 +110,10 @@ class UpdateModel(nn.Module):
         self,
         perception_vector: jnp.ndarray,
         pokemon_ids: jnp.ndarray | None = None,
+        state_grid: jnp.ndarray | None = None,
+        edge_pos: jnp.ndarray | None = None,
+        edge_velocity: jnp.ndarray | None = None,
+        edge_state: jnp.ndarray | None = None,
     ) -> jnp.ndarray:
         """Apply the model to an input tensor.
 
@@ -70,6 +127,7 @@ class UpdateModel(nn.Module):
         if self.perception_method == "learned":
             perception_vector = self.perception(perception_vector)
 
+        next_edge_values = None
         if self.nonlocal_connections:
             if self.nonlocal_mode == "token_attention":
                 batch, height, width, _ = perception_vector.shape
@@ -89,6 +147,43 @@ class UpdateModel(nn.Module):
                 global_context = jnp.einsum("bhwn,bnd->bhwd", weights, values)
                 gate = nn.sigmoid(self.context_gate(perception_vector))
                 global_context = gate * global_context
+            elif self.nonlocal_mode == "moving_edges":
+                if state_grid is None or edge_pos is None or edge_velocity is None or edge_state is None:
+                    raise ValueError(
+                        "moving_edges requires state_grid, edge_pos, "
+                        "edge_velocity, and edge_state"
+                    )
+                edge_owner = jnp.broadcast_to(
+                    perception_vector[..., None, :],
+                    perception_vector.shape[:3]
+                    + (self.edge_count, perception_vector.shape[-1]),
+                )
+                edge_input = jnp.concatenate([edge_owner, edge_state], axis=-1)
+                edge_delta = self.edge_net(edge_input)
+                acceleration = jnp.tanh(edge_delta[..., :2])
+                next_velocity = (
+                    self.edge_momentum * edge_velocity
+                    + self.edge_step_size * acceleration
+                )
+                next_position = jnp.clip(
+                    edge_pos + next_velocity, -1.0, 1.0
+                )
+                next_edge_state = edge_state + self.edge_state_step_size * jnp.tanh(
+                    edge_delta[..., 2:]
+                )
+                sampled = sample_continuous_edges(
+                    jnp.transpose(state_grid, (0, 2, 3, 1)), next_position
+                )
+                weights = nn.softmax(next_edge_state[..., 0], axis=-1)
+                received = jnp.sum(sampled * weights[..., None], axis=3)
+                perception_vector = jnp.concatenate(
+                    [perception_vector, received], axis=-1
+                )
+                next_edge_values = (
+                    next_position,
+                    next_velocity,
+                    next_edge_state,
+                )
             else:
                 # Every cell receives a learned summary of the entire grid.
                 global_context = jnp.mean(
@@ -99,9 +194,10 @@ class UpdateModel(nn.Module):
                     global_context,
                     perception_vector.shape[:3] + (global_context.shape[-1],),
                 )
-            perception_vector = jnp.concatenate(
-                [perception_vector, global_context], axis=-1
-            )
+            if self.nonlocal_mode != "moving_edges":
+                perception_vector = jnp.concatenate(
+                    [perception_vector, global_context], axis=-1
+                )
 
         if self.pokemon_vocab_size > 0:
             if pokemon_ids is None:
@@ -119,4 +215,6 @@ class UpdateModel(nn.Module):
         x = self.conv_1(perception_vector)
         x = nn.relu(x)
         ds = self.conv_2(x)
+        if next_edge_values is not None:
+            return ds, *next_edge_values
         return ds
