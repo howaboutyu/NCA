@@ -181,6 +181,7 @@ def cell_update(
     kernel_x5: Optional[jax.Array] = None,
     kernel_y5: Optional[jax.Array] = None,
     pokemon_ids: Optional[jax.Array] = None,
+    state_clip: float = 16.0,
     edge_pos: Optional[jax.Array] = None,
     edge_velocity: Optional[jax.Array] = None,
     edge_state: Optional[jax.Array] = None,
@@ -245,6 +246,14 @@ def cell_update(
     ds = jnp.transpose(ds, (0, 3, 1, 2))
 
     state_grid = state_grid + ds
+    state_grid = jnp.nan_to_num(
+        state_grid,
+        nan=0.0,
+        posinf=state_clip,
+        neginf=-state_clip,
+    )
+    if state_clip > 0.0:
+        state_grid = jnp.clip(state_grid, -state_clip, state_clip)
 
     post_alive_mask = alive_masking(state_grid[:, 3, :, :])
     alive_mask = pre_alive_mask * post_alive_mask

@@ -56,6 +56,7 @@ class UpdateModel(nn.Module):
     edge_momentum: float = 0.9
     edge_step_size: float = 0.05
     edge_state_step_size: float = 0.05
+    edge_message_scale: float = 0.25
     pokemon_vocab_size: int = 0
     pokemon_embedding_dim: int = 32
     kernel_init: Callable = nn.initializers.glorot_uniform
@@ -171,11 +172,13 @@ class UpdateModel(nn.Module):
                 next_edge_state = edge_state + self.edge_state_step_size * jnp.tanh(
                     edge_delta[..., 2:]
                 )
+                next_edge_state = 4.0 * jnp.tanh(next_edge_state / 4.0)
                 sampled = sample_continuous_edges(
                     jnp.transpose(state_grid, (0, 2, 3, 1)), next_position
                 )
                 weights = nn.softmax(next_edge_state[..., 0], axis=-1)
                 received = jnp.sum(sampled * weights[..., None], axis=3)
+                received = self.edge_message_scale * jnp.tanh(received)
                 perception_vector = jnp.concatenate(
                     [perception_vector, received], axis=-1
                 )

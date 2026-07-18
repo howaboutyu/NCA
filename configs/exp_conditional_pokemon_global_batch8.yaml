@@ -10,7 +10,9 @@ edge_state_dim: 16
 edge_momentum: 0.9
 edge_step_size: 0.05
 edge_state_step_size: 0.05
+edge_message_scale: 0.25
 edge_visualization_stride: 8
+state_clip: 16.0
 pokemon_embedding_dim: 32
 pokemon_targets:
   - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/bulbasaur.png"

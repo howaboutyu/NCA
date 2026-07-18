@@ -74,6 +74,7 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
         edge_momentum=config.edge_momentum,
         edge_step_size=config.edge_step_size,
         edge_state_step_size=config.edge_state_step_size,
+        edge_message_scale=config.edge_message_scale,
         pokemon_vocab_size=len(config.pokemon_targets),
         pokemon_embedding_dim=config.pokemon_embedding_dim,
     )
@@ -201,6 +202,7 @@ def create_cell_update_fn(
             kernel_x5=kernel_x5,
             kernel_y5=kernel_y5,
             pokemon_ids=pokemon_ids,
+            state_clip=config.state_clip,
             edge_pos=edge_pos,
             edge_velocity=edge_velocity,
             edge_state=edge_state,
