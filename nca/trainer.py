@@ -400,6 +400,7 @@ def make_connection_overlay_video(
             (width * scale, height * scale),
             interpolation=cv2.INTER_NEAREST,
         )
+        canvas = (canvas.astype(np.float32) * 0.25).astype(np.uint8)
         overlay = canvas.copy()
         for y in range(0, height, cell_stride):
             for x in range(0, width, cell_stride):
@@ -423,12 +424,12 @@ def make_connection_overlay_video(
                         origin,
                         (destination_x, destination_y),
                         color,
-                        1,
+                        2,
                         cv2.LINE_AA,
                     )
         rendered.append(
             cv2.cvtColor(
-                cv2.addWeighted(canvas, 0.72, overlay, 0.28, 0.0),
+                cv2.addWeighted(canvas, 0.35, overlay, 0.65, 0.0),
                 cv2.COLOR_BGR2RGB,
             ).astype(np.float32)
             / 255.0
