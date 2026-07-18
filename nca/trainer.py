@@ -9,6 +9,7 @@ import optax  # type: ignore
 from dataclasses import dataclass
 import cv2  # type: ignore
 import numpy as np
+from PIL import Image
 from typing import Tuple, List, Dict, Any, Callable, Optional
 from tqdm import tqdm  # type: ignore
 import os
@@ -435,6 +436,20 @@ def make_connection_overlay_video(
             / 255.0
         )
     make_video(rendered, filename, fps=fps)
+    gif_filename = os.path.splitext(filename)[0] + ".gif"
+    gif_frames = [
+        Image.fromarray(np.asarray(frame * 255.0, dtype=np.uint8))
+        for frame in rendered
+    ]
+    if gif_frames:
+        gif_frames[0].save(
+            gif_filename,
+            save_all=True,
+            append_images=gif_frames[1:],
+            duration=max(1, int(1000 / fps)),
+            loop=0,
+            optimize=False,
+        )
     return np.asarray(rendered)
 
 
