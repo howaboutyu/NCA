@@ -20,6 +20,7 @@ class NCAConfig:
     edge_momentum: float = 0.9
     edge_step_size: float = 0.05
     edge_state_step_size: float = 0.05
+    edge_visualization_stride: int = 4
     pokemon_targets: tuple = ()
     pokemon_embedding_dim: int = 32
     # Initial living-cell pattern. ``single`` preserves the original seed;

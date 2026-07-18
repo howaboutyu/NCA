@@ -221,6 +221,7 @@ def nca_looper(
     pokemon_ids: Optional[Array] = None,
     edge_count: int = 0,
     edge_state_dim: int = 0,
+    return_edge_history: bool = False,
 ) -> Tuple[Array, Array]:
     edge_pos = None
     edge_velocity = None
@@ -240,6 +241,7 @@ def nca_looper(
             dtype=state_grid.dtype,
         )
     state_grid_sequence = []
+    edge_position_sequence = []
     for _ in range(num_nca_steps):
         _, key = jax.random.split(key)
         result = cell_update_fn(
@@ -256,10 +258,15 @@ def nca_looper(
         else:
             state_grid = result
         state_grid_sequence.append(state_grid)
+        if edge_count > 0 and return_edge_history:
+            edge_position_sequence.append(edge_pos)
 
     pred_rgba = state_grid[:, :4]
 
-    return pred_rgba, jnp.asarray(state_grid_sequence)
+    state_grid_sequence = jnp.asarray(state_grid_sequence)
+    if edge_count > 0 and return_edge_history:
+        return pred_rgba, state_grid_sequence, jnp.asarray(edge_position_sequence)
+    return pred_rgba, state_grid_sequence
 
 
 def train_step(
@@ -333,7 +340,8 @@ def evaluate_step(
     pokemon_ids: Optional[Array] = None,
     edge_count: int = 0,
     edge_state_dim: int = 0,
-) -> Tuple[Array, Array]:
+    return_edge_history: bool = False,
+) -> Tuple[Array, Array, Optional[Array]]:
     """Runs a single evaluation step.
 
     Args:
@@ -347,7 +355,7 @@ def evaluate_step(
         loss: The loss value for this step.
     """
 
-    pred_rgba, state_grids = nca_looper(
+    result = nca_looper(
         key,
         params=state.params,
         state_grid=state_grid,
@@ -356,12 +364,75 @@ def evaluate_step(
         pokemon_ids=pokemon_ids,
         edge_count=edge_count,
         edge_state_dim=edge_state_dim,
+        return_edge_history=return_edge_history,
     )
+    if return_edge_history:
+        pred_rgba, state_grids, edge_positions = result
+    else:
+        pred_rgba, state_grids = result
+        edge_positions = None
 
     loss_value = mse(pred_rgba, target, reduce_loss)
 
     # return the predicted RGB values, loss as a tuple
+    if return_edge_history:
+        return state_grids, loss_value, edge_positions
     return state_grids, loss_value
+
+
+def make_connection_overlay_video(
+    images: list[np.ndarray],
+    edge_positions: np.ndarray,
+    filename: str,
+    cell_stride: int = 4,
+    fps: int = 10,
+) -> None:
+    """Render evolving moving edges over an NHWC evaluation sequence."""
+    rendered = []
+    positions = np.asarray(edge_positions)[:, 0]
+    for image, frame_positions in zip(images, positions):
+        base = np.asarray(image[..., :3] * 255.0, dtype=np.uint8)
+        height, width = base.shape[:2]
+        scale = 4
+        canvas = cv2.resize(
+            cv2.cvtColor(base, cv2.COLOR_RGB2BGR),
+            (width * scale, height * scale),
+            interpolation=cv2.INTER_NEAREST,
+        )
+        overlay = canvas.copy()
+        for y in range(0, height, cell_stride):
+            for x in range(0, width, cell_stride):
+                origin = (x * scale, y * scale)
+                for edge_index, position in enumerate(frame_positions[y, x]):
+                    destination_x = int(
+                        np.clip((position[0] + 1.0) * (width - 1) / 2.0, 0, width - 1)
+                        * scale
+                    )
+                    destination_y = int(
+                        np.clip((position[1] + 1.0) * (height - 1) / 2.0, 0, height - 1)
+                        * scale
+                    )
+                    color = (
+                        int(80 + 140 * ((edge_index * 67) % 255) / 255),
+                        int(80 + 140 * ((edge_index * 131) % 255) / 255),
+                        255,
+                    )
+                    cv2.line(
+                        overlay,
+                        origin,
+                        (destination_x, destination_y),
+                        color,
+                        1,
+                        cv2.LINE_AA,
+                    )
+        rendered.append(
+            cv2.cvtColor(
+                cv2.addWeighted(canvas, 0.72, overlay, 0.28, 0.0),
+                cv2.COLOR_BGR2RGB,
+            ).astype(np.float32)
+            / 255.0
+        )
+    make_video(rendered, filename, fps=fps)
 
 
 def train_and_evaluate(config: NCAConfig):
@@ -498,7 +569,7 @@ def train_and_evaluate(config: NCAConfig):
             # The gif is also logged with tensorboardX
             seed_grid = dataset_generator.seed_state[np.newaxis, ...]
 
-            val_state_grids, loss = evaluate_step(
+            evaluation_result = evaluate_step(
                 state,
                 seed_grid,
                 targets_by_pokemon[:1],
@@ -512,7 +583,16 @@ def train_and_evaluate(config: NCAConfig):
                     else 0
                 ),
                 edge_state_dim=config.edge_state_dim,
+                return_edge_history=(
+                    config.nonlocal_connections
+                    and config.nonlocal_mode == "moving_edges"
+                ),
             )
+            if config.nonlocal_connections and config.nonlocal_mode == "moving_edges":
+                val_state_grids, loss, edge_positions = evaluation_result
+            else:
+                val_state_grids, loss = evaluation_result
+                edge_positions = None
 
             tb_writer.add_scalar("val_loss", np.asarray(loss), state.step)
             tb_writer.add_image(
@@ -538,6 +618,16 @@ def train_and_evaluate(config: NCAConfig):
             os.makedirs(config.validation_video_dir, exist_ok=True)
             output_video_file = os.path.join(config.validation_video_dir, f"{step}.mp4")
             make_video(val_state_grids, output_video_file)
+            if edge_positions is not None:
+                connection_video_file = os.path.join(
+                    config.validation_video_dir, f"{step}_connections.mp4"
+                )
+                make_connection_overlay_video(
+                    val_state_grids,
+                    np.asarray(edge_positions),
+                    connection_video_file,
+                    cell_stride=config.edge_visualization_stride,
+                )
 
         if step % config.checkpoint_every == 0 and config.checkpoint_dir:
             # save checkpoint
