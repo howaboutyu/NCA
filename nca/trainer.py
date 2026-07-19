@@ -709,7 +709,16 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
     )
 
     nca_looper_fn = partial(
-        nca_looper, cell_update_fn=cell_update_fn, num_nca_steps=config.num_nca_steps
+        nca_looper,
+        cell_update_fn=cell_update_fn,
+        num_nca_steps=config.num_nca_steps,
+        pokemon_ids=jnp.zeros((1,), dtype=jnp.int32),
+        edge_count=(
+            config.edge_count
+            if config.nonlocal_connections and config.nonlocal_mode == "moving_edges"
+            else 0
+        ),
+        edge_state_dim=config.edge_state_dim,
     )
 
     nca_looper_fn = jax.jit(nca_looper_fn)  # type: ignore
