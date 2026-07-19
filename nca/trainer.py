@@ -22,6 +22,7 @@ from nca.nca import (
     create_second_derivative_kernels,
     create_multiscale_perception_kernels,
     cell_update,
+    alive_masking,
 )
 from nca.config import NCAConfig
 from nca.dataset import NCADataGenerator
@@ -187,6 +188,7 @@ def create_cell_update_fn(
         state_grid,
         params,
         pokemon_ids=None,
+        owner_alive=None,
         edge_pos=None,
         edge_velocity=None,
         edge_state=None,
@@ -207,6 +209,7 @@ def create_cell_update_fn(
             kernel_y5=kernel_y5,
             pokemon_ids=pokemon_ids,
             state_clip=config.state_clip,
+            owner_alive=owner_alive,
             edge_pos=edge_pos,
             edge_velocity=edge_velocity,
             edge_state=edge_state,
@@ -251,11 +254,13 @@ def nca_looper(
     edge_position_sequence = []
     for _ in range(num_nca_steps):
         _, key = jax.random.split(key)
+        owner_alive = alive_masking(state_grid[:, 3, :, :])
         result = cell_update_fn(
             key,
             state_grid,
             params,
             pokemon_ids,
+            owner_alive,
             edge_pos,
             edge_velocity,
             edge_state,
@@ -411,6 +416,8 @@ def make_connection_overlay_video(
         overlay = canvas.copy()
         for y in range(0, height, cell_stride):
             for x in range(0, width, cell_stride):
+                if image.shape[-1] >= 4 and image[y, x, 3] <= 0.1:
+                    continue
                 origin = (x * scale, y * scale)
                 for edge_index, position in enumerate(frame_positions[y, x]):
                     destination_x = int(

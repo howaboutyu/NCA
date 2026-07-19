@@ -112,6 +112,7 @@ class UpdateModel(nn.Module):
         perception_vector: jnp.ndarray,
         pokemon_ids: jnp.ndarray | None = None,
         state_grid: jnp.ndarray | None = None,
+        owner_alive: jnp.ndarray | None = None,
         edge_pos: jnp.ndarray | None = None,
         edge_velocity: jnp.ndarray | None = None,
         edge_state: jnp.ndarray | None = None,
@@ -154,6 +155,10 @@ class UpdateModel(nn.Module):
                         "moving_edges requires state_grid, edge_pos, "
                         "edge_velocity, and edge_state"
                     )
+                if owner_alive is None:
+                    owner_alive = jnp.ones(
+                        perception_vector.shape[:3], dtype=perception_vector.dtype
+                    )
                 edge_owner = jnp.broadcast_to(
                     perception_vector[..., None, :],
                     perception_vector.shape[:3]
@@ -173,12 +178,20 @@ class UpdateModel(nn.Module):
                     edge_delta[..., 2:]
                 )
                 next_edge_state = 4.0 * jnp.tanh(next_edge_state / 4.0)
+                owner_gate = owner_alive[..., None, None]
+                next_position = jnp.where(owner_gate, next_position, edge_pos)
+                next_velocity = jnp.where(owner_gate, next_velocity, edge_velocity)
+                next_edge_state = jnp.where(owner_gate, next_edge_state, edge_state)
                 sampled = sample_continuous_edges(
                     jnp.transpose(state_grid, (0, 2, 3, 1)), next_position
                 )
+                source_alive = jnp.clip(sampled[..., 3:4], 0.0, 1.0)
                 weights = nn.softmax(next_edge_state[..., 0], axis=-1)
-                received = jnp.sum(sampled * weights[..., None], axis=3)
+                received = jnp.sum(
+                    sampled * source_alive * weights[..., None], axis=3
+                )
                 received = self.edge_message_scale * jnp.tanh(received)
+                received = received * owner_alive[..., None]
                 perception_vector = jnp.concatenate(
                     [perception_vector, received], axis=-1
                 )
