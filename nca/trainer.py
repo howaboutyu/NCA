@@ -57,10 +57,14 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
             f"perception_method must be one of {sorted(valid_methods)}, "
             f"got {config.perception_method!r}"
         )
-    if config.nonlocal_connections and config.perception_method != "sobel_second":
+    if (
+        config.nonlocal_connections
+        and config.nonlocal_mode != "moving_edges"
+        and config.perception_method != "sobel_second"
+    ):
         raise ValueError(
             "nonlocal_connections is currently supported only with "
-            "perception_method='sobel_second'"
+            "perception_method='sobel_second' or nonlocal_mode='moving_edges'"
         )
     model = UpdateModel(
         model_output_len=config.model_output_len,
