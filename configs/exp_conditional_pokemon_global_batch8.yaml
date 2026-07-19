@@ -35,10 +35,10 @@ learning_rate: 0.0001
 n_damage: 1
 target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/dodrio.png"
 weights_dir: ""
-checkpoint_dir: "runs/conditional_pokemon_moving_edges_learned_live_syn_pokeball_noise25_stoch50/checkpoints"
-validation_video_dir: "runs/conditional_pokemon_moving_edges_learned_live_syn_pokeball_noise25_stoch50/validation_videos"
-log_dir: "runs/conditional_pokemon_moving_edges_learned_live_syn_pokeball_noise25_stoch50/logs"
-evaluation_video_file: "runs/conditional_pokemon_moving_edges_learned_live_syn_pokeball_noise25_stoch50/evaluation.mp4"
+checkpoint_dir: "runs/conditional_pokemon_moving_edges_learned_live_syn_pokeball_noise25_stoch50_fresh_repro/checkpoints"
+validation_video_dir: "runs/conditional_pokemon_moving_edges_learned_live_syn_pokeball_noise25_stoch50_fresh_repro/validation_videos"
+log_dir: "runs/conditional_pokemon_moving_edges_learned_live_syn_pokeball_noise25_stoch50_fresh_repro/logs"
+evaluation_video_file: "runs/conditional_pokemon_moving_edges_learned_live_syn_pokeball_noise25_stoch50_fresh_repro/evaluation.mp4"
 checkpoint_every: 500
 eval_every: 500
 log_every: 500
