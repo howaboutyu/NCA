@@ -125,7 +125,7 @@ If the model is trained with conditional Pokémon targets, run all identities in
 python main.py --config_path=path/to/config.yaml --mode=evaluate_all_pokemon --output_dir=./runs/inference_all_pokemon
 ```
 
-This command writes one `pokemon_<id>_<name>_cutout.mp4` file per configured Pokémon target.
+This command writes one `pokemon_<id>_<name>_cutout.mp4` file per configured Pokémon target under the given output directory (defaulting to your chosen `./runs/...` path). These videos are runtime outputs and are intentionally excluded from git tracking.
 
 ### 🔖 Checkpoints  <a name="checkpoints"></a>
 
