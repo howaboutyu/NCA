@@ -680,15 +680,41 @@ def train_and_evaluate(config: NCAConfig):
 
 
 def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None:
-    """This function evaluates the model for `config.total_eval_steps` steps starting with a seed state.
-        The output is a video (mp4) of the NCA propagation.
+    """This function evaluates one Pokémon id for `config.total_eval_steps` steps.
 
     Args:
         config (NCAConfig): The config object.
         output_video_path (optional):
             Where to save the video path, (sometime like /abc/eval.mp4). Defaults to None.
-            if none then the video is saved to `config.evaluation_video_file`
+            if none then the video is saved to `config.evaluation_video_file`.
     """
+    pokemon_ids = jnp.zeros((1,), dtype=jnp.int32)
+    evaluate_for_pokemon_id(
+        config=config,
+        output_video_path=output_video_path,
+        pokemon_id=0,
+        pokemon_ids=pokemon_ids,
+    )
+
+
+def evaluate_for_pokemon_id(
+    config: NCAConfig,
+    output_video_path: Optional[str],
+    pokemon_id: int = 0,
+    pokemon_ids: Optional[Array] = None,
+) -> None:
+    """Evaluate one conditional id and save a cutout video.
+
+    Args:
+        config: Run-time config.
+        output_video_path: Output file path for the rendered movie.
+        pokemon_id: Which Pokémon id to condition on.
+        pokemon_ids: Optional pre-broadcasted condition tensor.
+    """
+
+    if pokemon_ids is None:
+        pokemon_ids = jnp.array([pokemon_id], dtype=jnp.int32)
+
     state, _ = create_state(config)
 
     if config.weights_dir:
@@ -712,7 +738,6 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
         nca_looper,
         cell_update_fn=cell_update_fn,
         num_nca_steps=config.num_nca_steps,
-        pokemon_ids=jnp.zeros((1,), dtype=jnp.int32),
         edge_count=(
             config.edge_count
             if config.nonlocal_connections and config.nonlocal_mode == "moving_edges"
@@ -729,8 +754,11 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
     state_grid_cache = []
 
     key = jax.random.PRNGKey(0)
+    key = jax.random.fold_in(key, pokemon_id)
     for n in range(num_loops):
-        _, state_grid_array = nca_looper_fn(key, state.params, state_grid)
+        _, state_grid_array = nca_looper_fn(
+            key, state.params, state_grid, pokemon_ids=pokemon_ids
+        )
         state_grid = state_grid_array[-1]
         state_grid_cache.append(jnp.squeeze(state_grid_array))
 
@@ -775,3 +803,41 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
         make_video(rgb, config.evaluation_video_file)
     else:
         make_video(rgb, output_video_path)
+
+
+def evaluate_all_pokemon(config: NCAConfig, output_dir: str) -> None:
+    """Run conditional inference and save one cutout MP4 per Pokémon id."""
+    output_dir = os.path.abspath(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+
+    pokemon_targets = tuple(config.pokemon_targets)
+    if not pokemon_targets or pokemon_targets == (None,):
+        pokemon_targets = (config.target_filename,)
+
+    dataset_generator = NCADataGenerator(
+        pool_size=config.pool_size,
+        batch_size=config.batch_size,
+        dimensions=config.dimensions,
+        model_output_len=config.model_output_len,
+        seed_density=config.seed_density,
+        seed_random_seed=config.seed_random_seed,
+        seed_pattern=config.seed_pattern,
+        seed_size=config.seed_size,
+        pokemon_targets=pokemon_targets,
+    )
+
+    total = len(pokemon_targets)
+    if total == 0:
+        raise ValueError("No Pokémon targets are configured for conditional inference")
+
+    for pokemon_id in range(total):
+        target_name = os.path.splitext(os.path.basename(pokemon_targets[pokemon_id]))[0]
+        output_video_path = os.path.join(
+            output_dir,
+            f"pokemon_{pokemon_id:02d}_{target_name}_cutout.mp4",
+        )
+        evaluate_for_pokemon_id(
+            config=config,
+            output_video_path=output_video_path,
+            pokemon_id=pokemon_id,
+        )
