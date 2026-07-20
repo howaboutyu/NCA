@@ -98,3 +98,40 @@ steps per pass produced:
 
 The multi-scale mode improves accuracy over first-order Sobel, but remains
 slower and less accurate than the second-derivative mode in this run.
+
+## Global non-local connection experiment
+
+The architecture-level non-local branch is enabled with
+`nonlocal_connections: true`. It computes a global summary of the local
+perception and broadcasts a learned projection back to every cell:
+
+$$
+g = \frac{1}{HW}\sum_{i=1}^{H}\sum_{j=1}^{W} p_{ij},
+\qquad
+z_{ij} = \left[p_{ij},\; \phi(g)\right],
+$$
+
+For this PR, the local perception is specifically the second-derivative
+operator:
+
+$$
+p_{ij} =
+\left[u_{ij},\; (u_x)_{ij},\; (u_y)_{ij},\;
+(u_{xx})_{ij},\; (u_{yy})_{ij}\right].
+$$
+
+Here \(p_{ij}\) is the 80-dimensional local perception vector at cell
+\((i,j)\) for \(C=16\) state channels, and
+\(\phi: \mathbb{R}^{80}\rightarrow\mathbb{R}^{32}\) is a learned dense
+projection. Thus every cell receives information derived from the entire grid.
+This is an addition to `sobel_second`, not a separate Sobel operator.
+
+20-step CPU smoke benchmark at 32×32:
+
+| Method | Step time | Final MSE |
+| --- | ---: | ---: |
+| `sobel_second` | 137.49 ms | 0.1799 |
+| `sobel_second_global` | 148.43 ms | 0.1807 |
+
+The global branch is functional, but this short run does not yet show an
+accuracy benefit. A full CUDA training run is needed for a stronger comparison.

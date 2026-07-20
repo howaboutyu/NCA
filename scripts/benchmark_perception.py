@@ -22,6 +22,7 @@ from nca.trainer import create_cell_update_fn, create_state, evaluate_step, trai
 
 
 def benchmark(method: str, steps: int, nca_steps: int, dimensions: tuple[int, int]):
+    global_context = method in {"sobel_second_global", "sobel_second_token_attention"}
     config = NCAConfig(
         dimensions=dimensions,
         model_output_len=16,
@@ -33,7 +34,13 @@ def benchmark(method: str, steps: int, nca_steps: int, dimensions: tuple[int, in
         target_filename="emoji_imgs/smile.png",
         weights_dir="",
         checkpoint_dir="",
-        perception_method=method,
+        perception_method="sobel_second" if global_context else method,
+        nonlocal_connections=global_context,
+        nonlocal_mode=(
+            "token_attention"
+            if method == "sobel_second_token_attention"
+            else "global"
+        ),
     )
     state, _ = create_state(config)
     update_fn = create_cell_update_fn(config, state.apply_fn, use_jit=False)
@@ -104,6 +111,8 @@ def main():
             "sobel_fused",
             "sobel_second",
             "sobel_multiscale",
+            "sobel_second_global",
+            "sobel_second_token_attention",
             "learned",
         ],
     )

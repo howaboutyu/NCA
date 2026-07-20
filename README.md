@@ -15,6 +15,7 @@
 <p align="center"> A Jax implementation of Neural Cellular Automata 
     <br> 
     <img src="./docs/gifs/output_half.gif" alt="NCA">
+    <img src="./docs/gifs/pokemon_64ch_64x64_nosyn.gif" alt="64-channel 64x64 Pokémon reconstruction without synapses">
 
 </p>
 
@@ -100,7 +101,7 @@ Configuration settings can be defined using YAML files. The default configuratio
 
 To specify your own target image, you can modify the `target_filename` field in the YAML file to the desired image filename. Please ensure that the image has an alpha channel.
 
-Select the perception implementation with `perception_method`: `sobel` (the original two-convolution path), `sobel_fused` (an equivalent fused convolution), `sobel_second` (adds second derivatives), `sobel_multiscale` (combines 3x3 and 5x5 gradients), or `learned` (a trainable 3x3 convolutional perception block). Compare them with:
+Select the perception implementation with `perception_method`: `sobel` (the original two-convolution path), `sobel_fused` (an equivalent fused convolution), `sobel_second` (adds second derivatives), `sobel_multiscale` (combines 3x3 and 5x5 gradients), or `learned` (a trainable 3x3 convolutional perception block). Set `perception_method: sobel_second` and `nonlocal_connections: true` to add long-range context. Use `nonlocal_mode: global` for a pooled whole-grid summary, or `nonlocal_mode: token_attention` for gated attention to an 8x8 spatial token grid. Initial states support `seed_pattern: single`, `random`, or a compact `pokeball` icon; set `seed_size` to control the icon diameter in cells.
 
 ```bash
 python scripts/benchmark_perception.py --steps 100 --nca-steps 32
