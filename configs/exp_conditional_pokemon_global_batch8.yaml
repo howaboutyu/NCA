@@ -3,9 +3,9 @@
 dimensions: [64, 64]
 model_output_len: 64
 perception_method: learned
-nonlocal_connections: true
-nonlocal_mode: moving_edges
-edge_count: 4
+nonlocal_connections: false
+nonlocal_mode: global
+edge_count: 0
 edge_state_dim: 16
 edge_momentum: 0.9
 edge_step_size: 0.05
@@ -35,10 +35,10 @@ learning_rate: 0.0001
 n_damage: 1
 target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/dodrio.png"
 weights_dir: ""
-checkpoint_dir: "runs/conditional_pokemon_moving_edges_learned_live_syn_64ch_64x64_fresh/checkpoints"
-validation_video_dir: "runs/conditional_pokemon_moving_edges_learned_live_syn_64ch_64x64_fresh/validation_videos"
-log_dir: "runs/conditional_pokemon_moving_edges_learned_live_syn_64ch_64x64_fresh/logs"
-evaluation_video_file: "runs/conditional_pokemon_moving_edges_learned_live_syn_64ch_64x64_fresh/evaluation.mp4"
+checkpoint_dir: "runs/conditional_pokemon_learned_64ch_64x64_nosyn_fresh/checkpoints"
+validation_video_dir: "runs/conditional_pokemon_learned_64ch_64x64_nosyn_fresh/validation_videos"
+log_dir: "runs/conditional_pokemon_learned_64ch_64x64_nosyn_fresh/logs"
+evaluation_video_file: "runs/conditional_pokemon_learned_64ch_64x64_nosyn_fresh/evaluation.mp4"
 checkpoint_every: 500
 eval_every: 500
 log_every: 500
