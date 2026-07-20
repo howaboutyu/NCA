@@ -14,6 +14,17 @@ class NCAConfig:
     nonlocal_mode: str = "global"
     nonlocal_token_grid: int = 8
     nonlocal_attention_dim: int = 32
+    # Optional differentiable moving-edge communication.
+    edge_count: int = 4
+    edge_state_dim: int = 16
+    edge_momentum: float = 0.9
+    edge_step_size: float = 0.05
+    edge_state_step_size: float = 0.05
+    edge_message_scale: float = 0.25
+    edge_visualization_stride: int = 4
+    state_clip: float = 16.0
+    pokemon_targets: tuple = ()
+    pokemon_embedding_dim: int = 32
     # Initial living-cell pattern. ``single`` preserves the original seed;
     # ``random`` uses ``seed_density``; ``pokeball`` uses a compact RGBA icon.
     seed_pattern: str = "single"
@@ -21,6 +32,8 @@ class NCAConfig:
     # Fraction of grid cells initialized as living cells. Zero preserves the
     # original single-cell center seed.
     seed_density: float = 0.0
+    # For a Poké Ball seed, optionally add random live cells around the icon.
+    seed_noise_density: float = 0.0
     seed_random_seed: int = 0
     batch_size: int = 16
     total_training_steps: int = 100000

@@ -15,6 +15,7 @@
 <p align="center"> A Jax implementation of Neural Cellular Automata 
     <br> 
     <img src="./docs/gifs/output_half.gif" alt="NCA">
+    <img src="./docs/gifs/pokemon_64ch_64x64_nosyn.gif" alt="64-channel 64x64 Pokémon reconstruction without synapses">
 
 </p>
 

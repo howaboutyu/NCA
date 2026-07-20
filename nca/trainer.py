@@ -9,6 +9,7 @@ import optax  # type: ignore
 from dataclasses import dataclass
 import cv2  # type: ignore
 import numpy as np
+from PIL import Image
 from typing import Tuple, List, Dict, Any, Callable, Optional
 from tqdm import tqdm  # type: ignore
 import os
@@ -21,6 +22,7 @@ from nca.nca import (
     create_second_derivative_kernels,
     create_multiscale_perception_kernels,
     cell_update,
+    alive_masking,
 )
 from nca.config import NCAConfig
 from nca.dataset import NCADataGenerator
@@ -56,10 +58,14 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
             f"perception_method must be one of {sorted(valid_methods)}, "
             f"got {config.perception_method!r}"
         )
-    if config.nonlocal_connections and config.perception_method != "sobel_second":
+    if (
+        config.nonlocal_connections
+        and config.nonlocal_mode != "moving_edges"
+        and config.perception_method != "sobel_second"
+    ):
         raise ValueError(
             "nonlocal_connections is currently supported only with "
-            "perception_method='sobel_second'"
+            "perception_method='sobel_second' or nonlocal_mode='moving_edges'"
         )
     model = UpdateModel(
         model_output_len=config.model_output_len,
@@ -68,6 +74,14 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
         nonlocal_mode=config.nonlocal_mode,
         nonlocal_token_grid=config.nonlocal_token_grid,
         nonlocal_attention_dim=config.nonlocal_attention_dim,
+        edge_count=config.edge_count,
+        edge_state_dim=config.edge_state_dim,
+        edge_momentum=config.edge_momentum,
+        edge_step_size=config.edge_step_size,
+        edge_state_step_size=config.edge_state_step_size,
+        edge_message_scale=config.edge_message_scale,
+        pokemon_vocab_size=len(config.pokemon_targets),
+        pokemon_embedding_dim=config.pokemon_embedding_dim,
     )
     dummy_data = jax.random.normal(
         jax.random.PRNGKey(0),
@@ -94,7 +108,33 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
         )
 
     if restored_dict == None:
-        params = model.init(jax.random.PRNGKey(0), dummy_data)
+        init_kwargs = {
+            "pokemon_ids": jnp.zeros((1,), dtype=jnp.int32),
+        }
+        if config.nonlocal_connections and config.nonlocal_mode == "moving_edges":
+            init_kwargs.update(
+                state_grid=jnp.zeros(
+                    (1, config.model_output_len, *config.dimensions),
+                    dtype=dummy_data.dtype,
+                ),
+                edge_pos=jnp.zeros(
+                    (1, *config.dimensions, config.edge_count, 2),
+                    dtype=dummy_data.dtype,
+                ),
+                edge_velocity=jnp.zeros(
+                    (1, *config.dimensions, config.edge_count, 2),
+                    dtype=dummy_data.dtype,
+                ),
+                edge_state=jnp.zeros(
+                    (1, *config.dimensions, config.edge_count, config.edge_state_dim),
+                    dtype=dummy_data.dtype,
+                ),
+            )
+        params = model.init(
+            jax.random.PRNGKey(0),
+            dummy_data,
+            **init_kwargs,
+        )
         print("Initializing params from scratch")
     else:
         print(f"Loading params from ckpt {config.weights_dir}")
@@ -143,7 +183,16 @@ def create_cell_update_fn(
         )
 
     # define a function to update the cell state grid using the provided model function and parameters
-    def cell_update_fn(key, state_grid, params):
+    def cell_update_fn(
+        key,
+        state_grid,
+        params,
+        pokemon_ids=None,
+        owner_alive=None,
+        edge_pos=None,
+        edge_velocity=None,
+        edge_state=None,
+    ):
         # call the cell_update function with the provided inputs and the perception kernels
         return cell_update(
             key=key,
@@ -158,13 +207,18 @@ def create_cell_update_fn(
             kernel_yy=kernel_yy,
             kernel_x5=kernel_x5,
             kernel_y5=kernel_y5,
+            pokemon_ids=pokemon_ids,
+            state_clip=config.state_clip,
+            owner_alive=owner_alive,
+            edge_pos=edge_pos,
+            edge_velocity=edge_velocity,
+            edge_state=edge_state,
         )
 
     # if we want to use jit, then jit the cell_update_fn function
     if use_jit:
         cell_update_fn = jax.jit(cell_update_fn)
 
-    # return the cell_update_fn function
     return cell_update_fn
 
 
@@ -174,16 +228,57 @@ def nca_looper(
     state_grid: Array,
     num_nca_steps: int,
     cell_update_fn: Callable,
+    pokemon_ids: Optional[Array] = None,
+    edge_count: int = 0,
+    edge_state_dim: int = 0,
+    return_edge_history: bool = False,
 ) -> Tuple[Array, Array]:
+    edge_pos = None
+    edge_velocity = None
+    edge_state = None
+    if edge_count > 0:
+        init_key, key = jax.random.split(key)
+        batch, _, height, width = state_grid.shape
+        edge_pos = jax.random.uniform(
+            init_key,
+            (batch, height, width, edge_count, 2),
+            minval=-1.0,
+            maxval=1.0,
+        )
+        edge_velocity = jnp.zeros_like(edge_pos)
+        edge_state = jnp.zeros(
+            (batch, height, width, edge_count, edge_state_dim),
+            dtype=jnp.float32,
+        )
     state_grid_sequence = []
+    edge_position_sequence = []
     for _ in range(num_nca_steps):
         _, key = jax.random.split(key)
-        state_grid = cell_update_fn(key, state_grid, params)
+        owner_alive = alive_masking(state_grid[:, 3, :, :])
+        result = cell_update_fn(
+            key,
+            state_grid,
+            params,
+            pokemon_ids,
+            owner_alive,
+            edge_pos,
+            edge_velocity,
+            edge_state,
+        )
+        if edge_count > 0:
+            state_grid, edge_pos, edge_velocity, edge_state = result
+        else:
+            state_grid = result
         state_grid_sequence.append(state_grid)
+        if edge_count > 0 and return_edge_history:
+            edge_position_sequence.append(edge_pos)
 
     pred_rgba = state_grid[:, :4]
 
-    return pred_rgba, jnp.asarray(state_grid_sequence)
+    state_grid_sequence = jnp.asarray(state_grid_sequence)
+    if edge_count > 0 and return_edge_history:
+        return pred_rgba, state_grid_sequence, jnp.asarray(edge_position_sequence)
+    return pred_rgba, state_grid_sequence
 
 
 def train_step(
@@ -194,6 +289,9 @@ def train_step(
     cell_update_fn: Callable,
     num_nca_steps: int = 64,
     apply_grad: Optional[bool] = True,
+    pokemon_ids: Optional[Array] = None,
+    edge_count: int = 0,
+    edge_state_dim: int = 0,
 ) -> Tuple[train_state.TrainState, Array, Array]:
     """Runs a single training step.
 
@@ -220,6 +318,9 @@ def train_step(
             state_grid,
             num_nca_steps=num_nca_steps,
             cell_update_fn=cell_update_fn,
+            pokemon_ids=pokemon_ids,
+            edge_count=edge_count,
+            edge_state_dim=edge_state_dim,
         )
 
         # used for visualizing the state grid during training
@@ -248,7 +349,11 @@ def evaluate_step(
     num_nca_steps: int = 64,
     reduce_loss: bool = True,
     key=jax.random.PRNGKey(0),
-) -> Tuple[Array, Array]:
+    pokemon_ids: Optional[Array] = None,
+    edge_count: int = 0,
+    edge_state_dim: int = 0,
+    return_edge_history: bool = False,
+) -> Tuple[Array, Array, Optional[Array]]:
     """Runs a single evaluation step.
 
     Args:
@@ -262,18 +367,103 @@ def evaluate_step(
         loss: The loss value for this step.
     """
 
-    pred_rgba, state_grids = nca_looper(
+    result = nca_looper(
         key,
         params=state.params,
         state_grid=state_grid,
         num_nca_steps=num_nca_steps,
         cell_update_fn=cell_update_fn,
+        pokemon_ids=pokemon_ids,
+        edge_count=edge_count,
+        edge_state_dim=edge_state_dim,
+        return_edge_history=return_edge_history,
     )
+    if return_edge_history:
+        pred_rgba, state_grids, edge_positions = result
+    else:
+        pred_rgba, state_grids = result
+        edge_positions = None
 
     loss_value = mse(pred_rgba, target, reduce_loss)
 
     # return the predicted RGB values, loss as a tuple
+    if return_edge_history:
+        return state_grids, loss_value, edge_positions
     return state_grids, loss_value
+
+
+def make_connection_overlay_video(
+    images: list[np.ndarray],
+    edge_positions: np.ndarray,
+    filename: str,
+    cell_stride: int = 4,
+    fps: int = 10,
+) -> np.ndarray:
+    """Render evolving moving edges over an NHWC evaluation sequence."""
+    rendered = []
+    positions = np.asarray(edge_positions)[:, 0]
+    for image, frame_positions in zip(images, positions):
+        image = np.squeeze(np.asarray(image))
+        base = np.asarray(image[..., :3] * 255.0, dtype=np.uint8)
+        height, width = base.shape[:2]
+        scale = 4
+        canvas = cv2.resize(
+            cv2.cvtColor(base, cv2.COLOR_RGB2BGR),
+            (width * scale, height * scale),
+            interpolation=cv2.INTER_NEAREST,
+        )
+        canvas = (canvas.astype(np.float32) * 0.25).astype(np.uint8)
+        overlay = canvas.copy()
+        for y in range(0, height, cell_stride):
+            for x in range(0, width, cell_stride):
+                if image.shape[-1] >= 4 and image[y, x, 3] <= 0.1:
+                    continue
+                origin = (x * scale, y * scale)
+                for edge_index, position in enumerate(frame_positions[y, x]):
+                    destination_x = int(
+                        np.clip((position[0] + 1.0) * (width - 1) / 2.0, 0, width - 1)
+                        * scale
+                    )
+                    destination_y = int(
+                        np.clip((position[1] + 1.0) * (height - 1) / 2.0, 0, height - 1)
+                        * scale
+                    )
+                    color = (
+                        int(80 + 140 * ((edge_index * 67) % 255) / 255),
+                        int(80 + 140 * ((edge_index * 131) % 255) / 255),
+                        255,
+                    )
+                    cv2.line(
+                        overlay,
+                        origin,
+                        (destination_x, destination_y),
+                        color,
+                        2,
+                        cv2.LINE_AA,
+                    )
+        rendered.append(
+            cv2.cvtColor(
+                cv2.addWeighted(canvas, 0.35, overlay, 0.65, 0.0),
+                cv2.COLOR_BGR2RGB,
+            ).astype(np.float32)
+            / 255.0
+        )
+    make_video(rendered, filename, fps=fps)
+    gif_filename = os.path.splitext(filename)[0] + ".gif"
+    gif_frames = [
+        Image.fromarray(np.asarray(frame * 255.0, dtype=np.uint8))
+        for frame in rendered
+    ]
+    if gif_frames:
+        gif_frames[0].save(
+            gif_filename,
+            save_all=True,
+            append_images=gif_frames[1:],
+            duration=max(1, int(1000 / fps)),
+            loop=0,
+            optimize=False,
+        )
+    return np.asarray(rendered)
 
 
 def train_and_evaluate(config: NCAConfig):
@@ -293,12 +483,14 @@ def train_and_evaluate(config: NCAConfig):
         dimensions=config.dimensions,
         model_output_len=config.model_output_len,
         seed_density=config.seed_density,
+        seed_noise_density=config.seed_noise_density,
         seed_random_seed=config.seed_random_seed,
         seed_pattern=config.seed_pattern,
         seed_size=config.seed_size,
+        pokemon_targets=config.pokemon_targets,
     )
 
-    train_target = dataset_generator.get_target(config.target_filename)
+    targets_by_pokemon = dataset_generator.get_targets(config.target_filename)
 
     # create a random key for generating subkeys
     key = jax.random.PRNGKey(0)
@@ -311,6 +503,12 @@ def train_and_evaluate(config: NCAConfig):
         cell_update_fn=cell_update_fn,
         num_nca_steps=config.num_nca_steps,
         apply_grad=True,
+        edge_count=(
+            config.edge_count
+            if config.nonlocal_connections and config.nonlocal_mode == "moving_edges"
+            else 0
+        ),
+        edge_state_dim=config.edge_state_dim,
     )
 
     # jit the train_step function
@@ -319,6 +517,9 @@ def train_and_evaluate(config: NCAConfig):
     for step in range(state.step, config.total_training_steps):
         # get the training data
         state_grids, state_grid_indices = dataset_generator.sample(key, damage=False)
+        pokemon_ids = dataset_generator.pool_pokemon_ids[state_grid_indices]
+        batch_indices = np.arange(config.batch_size)
+        train_target = targets_by_pokemon[pokemon_ids, batch_indices]
 
         loss_non_reduced_np = np.asarray(
             mse(state_grids[:, :4], train_target, reduce_mean=False)
@@ -329,6 +530,9 @@ def train_and_evaluate(config: NCAConfig):
 
         # Rank from highest to lowest loss
         state_grids_ranked = state_grids[loss_rank]
+        target_ranked = train_target[loss_rank]
+        pokemon_ids_ranked = pokemon_ids[loss_rank]
+        pool_indices_ranked = state_grid_indices[loss_rank]
 
         # set the worst performing batch to the seed state
         state_grids_ranked[:1] = dataset_generator.seed_state
@@ -348,6 +552,9 @@ def train_and_evaluate(config: NCAConfig):
         )
         shuffled_idx = np.asarray(shuffled_idx)
         state_grids_ranked = state_grids_ranked[shuffled_idx]
+        target_ranked = target_ranked[shuffled_idx]
+        pokemon_ids_ranked = pokemon_ids_ranked[shuffled_idx]
+        pool_indices_shuffled = pool_indices_ranked[shuffled_idx]
 
         (
             state,
@@ -357,12 +564,13 @@ def train_and_evaluate(config: NCAConfig):
             key,
             state,
             state_grids_ranked,
-            train_target,
+            target_ranked,
+            pokemon_ids=pokemon_ids_ranked,
         )
 
         # replace the pool with final state grid
         final_training_grid = np.squeeze(training_grid_array[-1])
-        dataset_generator.update_pool(state_grid_indices, final_training_grid)
+        dataset_generator.update_pool(pool_indices_shuffled, final_training_grid)
         print(f"training_grid_array min: {jnp.min(training_grid_array)}")
         print(f"training_grid_array max: {jnp.max(training_grid_array)}")
         print(f"state_grid_indices: {state_grid_indices}")
@@ -392,16 +600,35 @@ def train_and_evaluate(config: NCAConfig):
             # The gif is also logged with tensorboardX
             seed_grid = dataset_generator.seed_state[np.newaxis, ...]
 
-            val_state_grids, loss = evaluate_step(
+            evaluation_result = evaluate_step(
                 state,
                 seed_grid,
-                train_target[:1],
+                targets_by_pokemon[:1],
                 cell_update_fn,
                 num_nca_steps=config.total_eval_steps,
+                pokemon_ids=jnp.zeros((1,), dtype=jnp.int32),
+                edge_count=(
+                    config.edge_count
+                    if config.nonlocal_connections
+                    and config.nonlocal_mode == "moving_edges"
+                    else 0
+                ),
+                edge_state_dim=config.edge_state_dim,
+                return_edge_history=(
+                    config.nonlocal_connections
+                    and config.nonlocal_mode == "moving_edges"
+                ),
             )
+            if config.nonlocal_connections and config.nonlocal_mode == "moving_edges":
+                val_state_grids, loss, edge_positions = evaluation_result
+            else:
+                val_state_grids, loss = evaluation_result
+                edge_positions = None
 
             tb_writer.add_scalar("val_loss", np.asarray(loss), state.step)
-            tb_writer.add_image("target_img", np.asarray(train_target[0]), state.step)
+            tb_writer.add_image(
+                "target_img", np.asarray(targets_by_pokemon[0, 0]), state.step
+            )
 
             tb_state_grids = np.array(val_state_grids)
             tb_state_grids = np.clip(tb_state_grids, 0.0, 1.0)
@@ -415,10 +642,32 @@ def train_and_evaluate(config: NCAConfig):
                 "val_video", vid_tensor=tb_state_grids, fps=30, global_step=state.step
             )
 
-            val_state_grids = [NCHW_to_NHWC(grid) for grid in val_state_grids]
+            val_state_grids = [
+                np.clip(np.asarray(NCHW_to_NHWC(grid)), 0.0, 1.0)
+                for grid in val_state_grids
+            ]
             os.makedirs(config.validation_video_dir, exist_ok=True)
             output_video_file = os.path.join(config.validation_video_dir, f"{step}.mp4")
             make_video(val_state_grids, output_video_file)
+            if edge_positions is not None:
+                connection_video_file = os.path.join(
+                    config.validation_video_dir, f"{step}_connections.mp4"
+                )
+                connection_frames = make_connection_overlay_video(
+                    val_state_grids,
+                    np.asarray(edge_positions),
+                    connection_video_file,
+                    cell_stride=config.edge_visualization_stride,
+                )
+                connection_tensor = np.transpose(
+                    connection_frames[np.newaxis, ...], (0, 1, 4, 2, 3)
+                )
+                tb_writer.add_video(
+                    "val_connections_video",
+                    vid_tensor=connection_tensor,
+                    fps=30,
+                    global_step=state.step,
+                )
 
         if step % config.checkpoint_every == 0 and config.checkpoint_dir:
             # save checkpoint
@@ -456,10 +705,20 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
         seed_random_seed=config.seed_random_seed,
         seed_pattern=config.seed_pattern,
         seed_size=config.seed_size,
+        pokemon_targets=config.pokemon_targets,
     )
 
     nca_looper_fn = partial(
-        nca_looper, cell_update_fn=cell_update_fn, num_nca_steps=config.num_nca_steps
+        nca_looper,
+        cell_update_fn=cell_update_fn,
+        num_nca_steps=config.num_nca_steps,
+        pokemon_ids=jnp.zeros((1,), dtype=jnp.int32),
+        edge_count=(
+            config.edge_count
+            if config.nonlocal_connections and config.nonlocal_mode == "moving_edges"
+            else 0
+        ),
+        edge_state_dim=config.edge_state_dim,
     )
 
     nca_looper_fn = jax.jit(nca_looper_fn)  # type: ignore
