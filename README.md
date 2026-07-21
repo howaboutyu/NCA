@@ -20,6 +20,37 @@
 </p>
 
 
+<h3 align="center">Inference gallery (conditional Pokémon)</h3>
+
+<div align="center">
+<table>
+  <tr>
+    <td align="center">
+      <img src="./docs/gifs/inference_all_pokemon/pokemon_00_bulbasaur_cutout.gif" width="150" alt="Bulbasaur inference"><br/>
+      Bulbasaur
+    </td>
+    <td align="center">
+      <img src="./docs/gifs/inference_all_pokemon/pokemon_01_charmander_cutout.gif" width="150" alt="Charmander inference"><br/>
+      Charmander
+    </td>
+    <td align="center">
+      <img src="./docs/gifs/inference_all_pokemon/pokemon_02_squirtle_cutout.gif" width="150" alt="Squirtle inference"><br/>
+      Squirtle
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="./docs/gifs/inference_all_pokemon/pokemon_03_pikachu_cutout.gif" width="150" alt="Pikachu inference"><br/>
+      Pikachu
+    </td>
+    <td align="center">
+      <img src="./docs/gifs/inference_all_pokemon/pokemon_04_eevee_cutout.gif" width="150" alt="Eevee inference"><br/>
+      Eevee
+    </td>
+  </tr>
+</table>
+</div>
+
 ## 📝 Table of Contents
 
 - [About](#about)
