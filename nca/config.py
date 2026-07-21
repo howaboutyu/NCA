@@ -36,6 +36,18 @@ class NCAConfig:
     # For a Poké Ball seed, optionally add random live cells around the icon.
     seed_noise_density: float = 0.0
     seed_random_seed: int = 0
+
+    # Evaluation-time overrides for initialization.
+    # Keep these at 0/empty to preserve current evaluation behavior.
+    eval_seed_density: float = 0.0
+    eval_seed_noise_density: float = 0.0
+    eval_seed_random_seed: int = 0
+    # Inference rollout behavior.
+    # False => match training eval (single contiguous rollout, no cutout perturbations).
+    # True  => old inference behavior with periodic random cutouts.
+    inference_apply_cutout: bool = False
+    inference_cutout_height_factor: float = 0.2
+    inference_cutout_width_factor: float = 0.2
     batch_size: int = 16
     total_training_steps: int = 100000
     eval_every: int = 500

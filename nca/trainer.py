@@ -720,7 +720,9 @@ def evaluate_for_pokemon_id(
     if config.weights_dir:
         state = checkpoints.restore_checkpoint(os.path.abspath(config.weights_dir), state)
 
-    cell_update_fn = create_cell_update_fn(config, state.apply_fn)
+    # Match training-time eval: use the non-jit cell update path so inference
+    # videos are directly comparable to val videos logged during training.
+    cell_update_fn = create_cell_update_fn(config, state.apply_fn, use_jit=False)
 
     dataset_generator = NCADataGenerator(
         pool_size=config.pool_size,
@@ -728,6 +730,7 @@ def evaluate_for_pokemon_id(
         dimensions=config.dimensions,
         model_output_len=config.model_output_len,
         seed_density=config.seed_density,
+        seed_noise_density=config.seed_noise_density,
         seed_random_seed=config.seed_random_seed,
         seed_pattern=config.seed_pattern,
         seed_size=config.seed_size,
@@ -746,58 +749,93 @@ def evaluate_for_pokemon_id(
         edge_state_dim=config.edge_state_dim,
     )
 
-    nca_looper_fn = jax.jit(nca_looper_fn)  # type: ignore
+    state_grid = np.array(dataset_generator.seed_state, copy=True)[np.newaxis, ...]
+    if config.eval_seed_density > 0.0 or config.eval_seed_noise_density > 0.0:
+        rng = np.random.default_rng(config.eval_seed_random_seed)
+        # Keep the Poké Ball icon if configured and add random live cells for
+        # additional entropy in evaluation.
+        random_mask = rng.random(config.dimensions) < config.eval_seed_density
+        if config.seed_pattern == "pokeball":
+            random_mask &= np.asarray(state_grid[0, 3]) <= 0.0
+        state_grid[0, 3:, random_mask] = 1.0
 
-    num_loops = int(config.total_eval_steps // config.num_nca_steps)
-
-    state_grid = dataset_generator.seed_state[np.newaxis, ...]
-    state_grid_cache = []
-
+        if config.eval_seed_noise_density > 0.0:
+            noise_mask = rng.random(config.dimensions) < config.eval_seed_noise_density
+            if config.seed_pattern == "pokeball":
+                noise_mask &= np.asarray(state_grid[0, 3]) <= 0.0
+            state_grid[0, :3, noise_mask] = rng.random(
+                (3, int(np.count_nonzero(noise_mask)))
+            )
+            state_grid[0, 3:, noise_mask] = 1.0
     key = jax.random.PRNGKey(0)
-    key = jax.random.fold_in(key, pokemon_id)
-    for n in range(num_loops):
-        _, state_grid_array = nca_looper_fn(
-            key, state.params, state_grid, pokemon_ids=pokemon_ids
+    # Keep evaluation RNG aligned with training-time eval, which uses an
+    # unshifted seed at inference/eval call sites. Pokémon conditioning is
+    # controlled explicitly through `pokemon_ids`.
+    if config.inference_apply_cutout:
+        state_grid_cache = []
+        num_loops = int(np.ceil(config.total_eval_steps / max(1, config.num_nca_steps)))
+        for n in range(num_loops):
+            _, state_grid_array = nca_looper_fn(
+                key, state.params, state_grid, pokemon_ids=pokemon_ids
+            )
+            state_grid = state_grid_array[-1]
+            state_grid_cache.append(jnp.squeeze(state_grid_array))
+
+            if n < num_loops - 1:
+                ###  Some cutout strategies ###
+                # 1) split the grid into two and make one half black
+                #
+                # state_grid = np.asarray(state_grid).copy()
+                # state_grid[:, : ,  : , :state_grid.shape[2]//2] = 0.0
+
+                # 2) make an entire left-side cutout (default for this run)
+                state_grid = NCADataGenerator.random_cutout_left_side(
+                    state_grid,
+                    width_factor=config.inference_cutout_width_factor,
+                    seed=int(key[0]),  # type: ignore
+                )
+
+            key, _ = jax.random.split(key)
+
+        state_grid_cache = jnp.array(state_grid_cache)  # type: ignore
+        state_grid_cache = jnp.concatenate(state_grid_cache, axis=0)
+        state_grid_cache = state_grid_cache[: config.total_eval_steps]
+    else:
+        eval_result = evaluate_step(
+            state=state,
+            state_grid=state_grid,
+            target=state_grid[:, :4],
+            cell_update_fn=cell_update_fn,
+            num_nca_steps=config.total_eval_steps,
+            pokemon_ids=pokemon_ids,
+            edge_count=(
+                config.edge_count
+                if config.nonlocal_connections
+                and config.nonlocal_mode == "moving_edges"
+                else 0
+            ),
+            edge_state_dim=config.edge_state_dim,
+            return_edge_history=config.nonlocal_connections
+            and config.nonlocal_mode == "moving_edges",
         )
-        state_grid = state_grid_array[-1]
-        state_grid_cache.append(jnp.squeeze(state_grid_array))
-
-        ###  Some cutout strategies ###
-        # 1) split the grid into two and make one half black
-        #
-        # state_grid = np.asarray(state_grid).copy()
-        # state_grid[:, : ,  : , :state_grid.shape[2]//2] = 0.0
-
-        # 2) make a random rectange cutouts
-        state_grid = NCADataGenerator.random_cutout_rect(
-            state_grid,
-            height_factor=0.2,
-            width_factor=0.2,
-            seed=int(key[0]),  # type: ignore
-        )
-
-        key, _ = jax.random.split(key)
-
-    state_grid_cache = jnp.array(state_grid_cache)  # type: ignore
-
-    state_grid_cache = jnp.concatenate(state_grid_cache, axis=0)
-    # save the entire state_grid_cache as npy.
-    # TODO: add path to config.
-
-    np.save("/tmp/state_grid_cache.npy", state_grid_cache)
+        state_grid_array = eval_result[0] if isinstance(eval_result, tuple) else eval_result
+        state_grid_cache = jnp.squeeze(state_grid_array)
+    # Optional debug dump of rollout cache for local inspection.
+    # Disabled by default to avoid unnecessary device-to-host transfers.
+    if os.environ.get("NCA_SAVE_STATE_GRID_CACHE") == "1":
+        np.save("/tmp/state_grid_cache.npy", np.asarray(state_grid_cache))
 
     state_grid_cache = jnp.clip(state_grid_cache, 0.0, 1.0)
-
-    rgba = np.asarray(state_grid_cache)[:, 0:4]
-
-    rgb = rgba[:, :3] * rgba[:, 3:4]
-    # NCHW -> NHWC
-    rgb = jnp.transpose(rgb, (0, 2, 3, 1))
-
-    # Resize through JAX so evaluation does not initialize a second GPU
-    # runtime (TensorFlow and JAX competing for the same CUDA context).
-    rgb = jax.image.resize(rgb, (rgb.shape[0], 256, 256, 3), method="nearest")
-    rgb = np.asarray(rgb)
+    rgb = np.array(state_grid_cache)[:, :3]
+    # Match training eval rendering (alpha thresholding then background composite).
+    if rgb.ndim == 4:
+        alpha = np.asarray(state_grid_cache)[:, 3:4] > 0.1
+        rgb = alpha * np.asarray(state_grid_cache)[:, :3]
+        # NCHW -> NHWC
+        rgb = np.transpose(rgb, (0, 2, 3, 1))
+    else:
+        alpha = np.asarray(state_grid_cache)[..., 3:4] > 0.1
+        rgb = alpha * np.asarray(state_grid_cache)[..., :3]
 
     if output_video_path is None:
         make_video(rgb, config.evaluation_video_file)

@@ -175,6 +175,22 @@ class NCADataGenerator:
         return NHWC_to_NCHW(img)
 
     @staticmethod
+    def random_cutout_left_side(
+        img_nchw: Array,
+        width_factor: float = 0.5,
+        seed: int = 10,
+    ):
+        """Black out a contiguous left strip while keeping full height."""
+        # Keep augmentation in NumPy to avoid GPU/PTX compatibility issues.
+        img = np.asarray(NCHW_to_NHWC(img_nchw)).copy()
+        _ = seed
+        n, h, w, _ = img.shape
+        cutout_w = max(1, int(round(w * np.clip(width_factor, 0.0, 1.0))))
+        # Deterministic: always blacken the leftmost columns.
+        img[:, :, :cutout_w, :] = 0
+        return NHWC_to_NCHW(img)
+
+    @staticmethod
     def random_cutout_circle(img_nchw: Array, seed: int):
         img = np.asarray(NCHW_to_NHWC(img_nchw)).copy()
         n, h, w, _ = img.shape
