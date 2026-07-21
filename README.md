@@ -20,6 +20,37 @@
 </p>
 
 
+<h3 align="center">Inference gallery (conditional Pokémon)</h3>
+
+<div align="center">
+<table>
+  <tr>
+    <td align="center">
+      <img src="./docs/gifs/inference_all_pokemon/pokemon_00_bulbasaur_cutout.gif" width="300" alt="Bulbasaur inference"><br/>
+      Bulbasaur
+    </td>
+    <td align="center">
+      <img src="./docs/gifs/inference_all_pokemon/pokemon_01_charmander_cutout.gif" width="300" alt="Charmander inference"><br/>
+      Charmander
+    </td>
+    <td align="center">
+      <img src="./docs/gifs/inference_all_pokemon/pokemon_02_squirtle_cutout.gif" width="300" alt="Squirtle inference"><br/>
+      Squirtle
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="./docs/gifs/inference_all_pokemon/pokemon_03_pikachu_cutout.gif" width="300" alt="Pikachu inference"><br/>
+      Pikachu
+    </td>
+    <td align="center">
+      <img src="./docs/gifs/inference_all_pokemon/pokemon_04_eevee_cutout.gif" width="300" alt="Eevee inference"><br/>
+      Eevee
+    </td>
+  </tr>
+</table>
+</div>
+
 ## 📝 Table of Contents
 
 - [About](#about)
@@ -118,6 +149,14 @@ python main.py --config_path=configs/growing_nca.yaml --mode=evaluate --output_v
 ```
 
 Please ensure that you update the `weights_dir` field in the configuration file with the accurate path to the downloaded checkpoint. Additionally, specify the `output_video_path` to determine the location where the NCA propagation will be saved in video format.
+
+If the model is trained with conditional Pokémon targets, run all identities in one command with cutout simulation:
+
+```bash
+python main.py --config_path=path/to/config.yaml --mode=evaluate_all_pokemon --output_dir=./runs/inference_all_pokemon
+```
+
+This command writes one `pokemon_<id>_<name>_cutout.mp4` file per configured Pokémon target under the given output directory (defaulting to your chosen `./runs/...` path). These videos are runtime outputs and are intentionally excluded from git tracking.
 
 ### 🔖 Checkpoints  <a name="checkpoints"></a>
 

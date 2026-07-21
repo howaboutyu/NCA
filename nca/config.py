@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 import yaml  # type: ignore
 
@@ -35,6 +36,18 @@ class NCAConfig:
     # For a Poké Ball seed, optionally add random live cells around the icon.
     seed_noise_density: float = 0.0
     seed_random_seed: int = 0
+
+    # Evaluation-time overrides for initialization.
+    # Keep these at 0/empty to preserve current evaluation behavior.
+    eval_seed_density: float = 0.0
+    eval_seed_noise_density: float = 0.0
+    eval_seed_random_seed: int = 0
+    # Inference rollout behavior.
+    # False => match training eval (single contiguous rollout, no cutout perturbations).
+    # True  => old inference behavior with periodic random cutouts.
+    inference_apply_cutout: bool = False
+    inference_cutout_height_factor: float = 0.2
+    inference_cutout_width_factor: float = 0.2
     batch_size: int = 16
     total_training_steps: int = 100000
     eval_every: int = 500
@@ -63,7 +76,37 @@ def load_config(config_file: str) -> NCAConfig:
     with open(config_file, "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    return NCAConfig(**config)
+    cfg = NCAConfig(**config)
+    config_dir = os.path.dirname(os.path.abspath(config_file))
+    config_root = os.path.dirname(config_dir)
+
+    def _resolve_path(value: str | None) -> str:
+        if not value:
+            return value or ""
+        if os.path.isabs(value):
+            return value
+        absolute_candidate = os.path.abspath(value)
+        if os.path.exists(absolute_candidate):
+            return absolute_candidate
+        config_dir_candidate = os.path.abspath(os.path.join(config_dir, value))
+        if os.path.exists(config_dir_candidate):
+            return config_dir_candidate
+        root_dir_candidate = os.path.abspath(os.path.join(config_root, value))
+        if os.path.exists(root_dir_candidate):
+            return root_dir_candidate
+        return config_dir_candidate
+
+    cfg.target_filename = _resolve_path(cfg.target_filename)
+    cfg.weights_dir = _resolve_path(cfg.weights_dir)
+    cfg.checkpoint_dir = _resolve_path(cfg.checkpoint_dir)
+    cfg.validation_video_dir = _resolve_path(cfg.validation_video_dir)
+    cfg.log_dir = _resolve_path(cfg.log_dir)
+    cfg.evaluation_video_file = _resolve_path(cfg.evaluation_video_file)
+
+    if cfg.pokemon_targets:
+        cfg.pokemon_targets = tuple(_resolve_path(path) for path in cfg.pokemon_targets)
+
+    return cfg
 
 
 def write_config(config: NCAConfig, config_file: str) -> None:
