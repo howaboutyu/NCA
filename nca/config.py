@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 import yaml  # type: ignore
 
@@ -63,7 +64,37 @@ def load_config(config_file: str) -> NCAConfig:
     with open(config_file, "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    return NCAConfig(**config)
+    cfg = NCAConfig(**config)
+    config_dir = os.path.dirname(os.path.abspath(config_file))
+    config_root = os.path.dirname(config_dir)
+
+    def _resolve_path(value: str | None) -> str:
+        if not value:
+            return value or ""
+        if os.path.isabs(value):
+            return value
+        absolute_candidate = os.path.abspath(value)
+        if os.path.exists(absolute_candidate):
+            return absolute_candidate
+        config_dir_candidate = os.path.abspath(os.path.join(config_dir, value))
+        if os.path.exists(config_dir_candidate):
+            return config_dir_candidate
+        root_dir_candidate = os.path.abspath(os.path.join(config_root, value))
+        if os.path.exists(root_dir_candidate):
+            return root_dir_candidate
+        return config_dir_candidate
+
+    cfg.target_filename = _resolve_path(cfg.target_filename)
+    cfg.weights_dir = _resolve_path(cfg.weights_dir)
+    cfg.checkpoint_dir = _resolve_path(cfg.checkpoint_dir)
+    cfg.validation_video_dir = _resolve_path(cfg.validation_video_dir)
+    cfg.log_dir = _resolve_path(cfg.log_dir)
+    cfg.evaluation_video_file = _resolve_path(cfg.evaluation_video_file)
+
+    if cfg.pokemon_targets:
+        cfg.pokemon_targets = tuple(_resolve_path(path) for path in cfg.pokemon_targets)
+
+    return cfg
 
 
 def write_config(config: NCAConfig, config_file: str) -> None:
