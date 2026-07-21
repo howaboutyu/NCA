@@ -34,6 +34,7 @@ total_eval_steps: 300
 learning_rate: 0.0001
 n_damage: 1
 target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/dodrio.png"
+inference_apply_cutout: true
 weights_dir: ""
 checkpoint_dir: "runs/conditional_pokemon_learned_64ch_64x64_nosyn_fresh/checkpoints"
 validation_video_dir: "runs/conditional_pokemon_learned_64ch_64x64_nosyn_fresh/validation_videos"
