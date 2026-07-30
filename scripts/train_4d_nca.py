@@ -138,7 +138,9 @@ def main() -> None:
             writer.add_scalar("learning_rate", float(schedule(step)), step)
             writer.flush()
         if step % config["checkpoint_every"] == 0:
-            checkpoints.save_checkpoint(checkpoint_dir, state, step=state.step, keep=3)
+            checkpoints.save_checkpoint(
+                checkpoint_dir, state, step=state.step, keep=3, overwrite=True
+            )
 
     checkpoints.save_checkpoint(checkpoint_dir, state, step=state.step, keep=3, overwrite=True)
     if last_projection is not None:

@@ -5,11 +5,58 @@ alpha/liveness, and the remaining channels are hidden state.  Rollout steps
 remain the automaton's time axis; the extra ``A`` axis is spatial.
 """
 
+from itertools import product
 from typing import Callable
 
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
+
+
+class Conv4D(nn.Module):
+    """JAX-native dense Conv4D that bypasses cuDNN's three-dimension limit.
+
+    The implementation expands a small SAME-padded kernel into static spatial
+    offsets and contracts each offset with an einsum. This is slower than a
+    vendor convolution, but it remains GPU-compatible for the small kernels
+    used by this experiment and preserves a true learned 4D receptive field.
+    """
+
+    features: int
+    kernel_size: tuple[int, int, int, int]
+    kernel_init: Callable = nn.initializers.glorot_uniform()
+    bias_init: Callable = nn.initializers.zeros
+
+    @nn.compact
+    def __call__(self, inputs: jax.Array) -> jax.Array:
+        if inputs.ndim != 6:
+            raise ValueError("Conv4D expects an N,D,H,W,A,C input")
+        if any(size % 2 == 0 for size in self.kernel_size):
+            raise ValueError("Conv4D currently requires odd kernel dimensions")
+        in_channels = inputs.shape[-1]
+        kernel = self.param(
+            "kernel",
+            self.kernel_init,
+            (*self.kernel_size, in_channels, self.features),
+        )
+        bias = self.param("bias", self.bias_init, (self.features,))
+        padding = tuple((size // 2, size // 2) for size in self.kernel_size)
+        padded = jnp.pad(
+            inputs,
+            ((0, 0), padding[0], padding[1], padding[2], padding[3], (0, 0)),
+        )
+        output = jnp.zeros(inputs.shape[:-1] + (self.features,), dtype=inputs.dtype)
+        spatial_shape = inputs.shape[1:-1]
+        for offset in product(*(range(size) for size in self.kernel_size)):
+            slices = tuple(
+                slice(index, index + length)
+                for index, length in zip(offset, spatial_shape)
+            )
+            patch = padded[(slice(None), *slices, slice(None))]
+            output = output + jnp.einsum(
+                "bdhwac,co->bdhwao", patch, kernel[offset]
+            )
+        return output + bias
 
 
 class UpdateModel4D(nn.Module):
@@ -22,10 +69,9 @@ class UpdateModel4D(nn.Module):
     kernel_init: Callable = nn.initializers.glorot_uniform
 
     def setup(self) -> None:
-        self.perception = nn.Conv(
+        self.perception = Conv4D(
             features=3 * self.state_channels,
             kernel_size=(3, 3, 3, 3),
-            padding="SAME",
             kernel_init=self.kernel_init(),
         )
         if self.pokemon_vocab_size > 0:
@@ -33,17 +79,15 @@ class UpdateModel4D(nn.Module):
                 num_embeddings=self.pokemon_vocab_size,
                 features=self.pokemon_embedding_dim,
             )
-        self.conv_1 = nn.Conv(
+        self.conv_1 = Conv4D(
             features=self.hidden_channels,
             kernel_size=(1, 1, 1, 1),
-            padding="SAME",
             kernel_init=self.kernel_init(),
         )
         # Zero initialization keeps the seed unchanged at the start of a run.
-        self.conv_2 = nn.Conv(
+        self.conv_2 = Conv4D(
             features=self.state_channels,
             kernel_size=(1, 1, 1, 1),
-            padding="SAME",
             kernel_init=nn.initializers.zeros,
         )
 

@@ -22,4 +22,4 @@ log_every: 50
 checkpoint_every: 500
 seed: 0
 target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/pikachu.png"
-run_dir: "/mnt/ssd1/data/git/NCA/runs/4d_conv_smoke"
+run_dir: "/mnt/ssd1/data/git/NCA/runs/4d_conv_smoke_gpu"
