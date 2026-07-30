@@ -85,6 +85,19 @@ def evaluate_and_write_gifs(
     make_gif(projection_frames, os.path.join(eval_dir, f"{step:06d}_reconstruction.gif"), fps=8)
     make_gif(a_frames, os.path.join(eval_dir, f"{step:06d}_a_slices.gif"), fps=8)
     make_gif(z_frames, os.path.join(eval_dir, f"{step:06d}_z_slices.gif"), fps=8)
+    for tag, gif_frames in (
+        ("eval/reconstruction", projection_frames),
+        ("eval/a_slices", a_frames),
+        ("eval/z_slices", z_frames),
+    ):
+        video = np.transpose(np.asarray(gif_frames, dtype=np.float32)[None], (0, 1, 4, 2, 3))
+        writer.add_video(tag, video, step, fps=8)
+        writer.add_image(
+            f"{tag}/first_frame",
+            np.transpose(np.asarray(gif_frames[0]), (2, 0, 1)),
+            step,
+            dataformats="CHW",
+        )
 
     final_projection = project_xy_over_a_4d(frames[-1], z_index)
     eval_loss = foreground_weighted_mse(
