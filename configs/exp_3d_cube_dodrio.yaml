@@ -1,0 +1,26 @@
+# True NCA cube: each state is (16, 32, 32, 32), ordered as
+# (state channels, z, y, x). Train state[:4, z=0]; render only its RGB.
+dimensions: [32, 32]
+depth: 32
+state_channels: 16
+hidden_channels: 32
+batch_size: 1
+pool_size: 128
+seed_reset_every: 16
+nca_steps: 8
+validation_steps: 64
+validation_every: 2500
+slice_stride: 4
+slice_scale: 4
+update_probability: 0.5
+learning_rate: 0.0002
+training_steps: 50000
+log_every: 500
+seed: 0
+render_axis: z
+render_index: 0
+seed_depth_index: 0
+target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/dodrio.png"
+run_dir: "/mnt/ssd1/data/git/NCA/runs/3d_nca16_face0_dodrio"
+log_dir: "/mnt/ssd1/data/git/NCA/runs/3d_nca16_face0_dodrio/logs"
+resume_checkpoint_dir: "/mnt/ssd1/data/git/NCA/runs/3d_nca16_face0_dodrio/checkpoints"

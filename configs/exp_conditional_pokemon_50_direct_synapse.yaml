@@ -1,0 +1,100 @@
+# Fifty-way conditional Pokémon regeneration without nonlocal synapses,
+# warm-started from the five-way local conditional model.
+dimensions: [64, 64]
+model_output_len: 64
+perception_method: learned
+nonlocal_connections: false
+nonlocal_mode: global
+edge_count: 0
+state_clip: 16.0
+pokemon_embedding_dim: 32
+pokemon_targets:
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/arcanine.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/beedrill.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/bulbasaur.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/charizard.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/clefable.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/crobat.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/dewgong.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/donphan.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/dugtrio.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/electrode.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/exeggutor.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/flareon.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/geodude.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/goldeen.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/grimer.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/hitmonchan.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/hoppip.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/igglybuff.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/jynx.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/kangaskhan.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/lanturn.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/lickitung.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/magby.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/magneton.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/marowak.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/miltank.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/murkrow.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/nidoranm.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/octillery.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/paras.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/pidgeot.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/pineco.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/poliwrath.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/psyduck.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/raichu.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/remoraid.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/sandslash.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/seel.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/skiploom.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/smeargle.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/spearow.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/staryu.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/sunkern.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/tentacool.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/typhlosion.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/ursaring.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/victreebel.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/weedle.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/wooper.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/zubat.png"
+seed_pattern: pokeball
+seed_size: 11
+seed_density: 0.0
+seed_noise_density: 0.25
+seed_random_seed: 0
+stochastic_update_prob: 0.5
+# This local architecture supports the established eight-image batch size.
+batch_size: 8
+pool_size: 1000
+total_training_steps: 240000
+num_nca_steps: 64
+total_eval_steps: 360
+learning_rate: 0.00005
+n_damage: 2
+train_cutout_strategies: [left_side, random_side, circle, ellipse, square]
+train_cutout_square_height_factor_range: [0.12, 0.60]
+train_cutout_square_width_factor_range: [0.12, 0.60]
+train_cutout_left_width_factor_range: [0.15, 0.75]
+train_cutout_noise_probability: 1.0
+train_cutout_noise_scale: [0.05, 0.65]
+inference_apply_cutout: true
+inference_cutout_strategies: [left_side, random_side, circle, ellipse, square]
+inference_cutout_square_height_factor_range: [0.12, 0.60]
+inference_cutout_square_width_factor_range: [0.12, 0.60]
+inference_cutout_left_width_factor_range: [0.15, 0.75]
+inference_cutout_noise_probability: 1.0
+inference_cutout_noise_scale: [0.05, 0.65]
+inference_cutout_start_step: 60
+inference_cutout_interval_steps: 90
+eval_random_pokemon_id: true
+target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/dodrio.png"
+weights_dir: "/mnt/ssd1/data/git/NCA/runs/conditional_pokemon_strong_cutout_resume/checkpoints"
+checkpoint_dir: "/mnt/ssd1/data/git/NCA/runs/conditional_pokemon_50/checkpoints"
+validation_video_dir: "/mnt/ssd1/data/git/NCA/runs/conditional_pokemon_50/validation_videos"
+log_dir: "/mnt/ssd1/data/git/NCA/runs/conditional_pokemon_50/logs"
+evaluation_video_file: "/mnt/ssd1/data/git/NCA/runs/conditional_pokemon_50/evaluation.mp4"
+checkpoint_every: 500
+eval_every: 500
+log_every: 500

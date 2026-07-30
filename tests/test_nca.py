@@ -181,7 +181,6 @@ def test_moving_edges_update_and_aggregate_messages():
     )
     perception = random.normal(key, (1, 8, 8, 16 * 5))
     positions = jnp.zeros((1, 8, 8, edge_count, 2))
-    velocity = jnp.zeros_like(positions)
     edge_state = jnp.zeros((1, 8, 8, edge_count, edge_dim))
     params = model.init(
         key,
@@ -189,24 +188,22 @@ def test_moving_edges_update_and_aggregate_messages():
         pokemon_ids=jnp.array([0]),
         state_grid=x,
         edge_pos=positions,
-        edge_velocity=velocity,
         edge_state=edge_state,
     )
-    output, next_positions, next_velocity, next_edge_state = model.apply(
+    output, next_positions, next_edge_state = model.apply(
         params,
         perception,
         pokemon_ids=jnp.array([0]),
         state_grid=x,
         edge_pos=positions,
-        edge_velocity=velocity,
         edge_state=edge_state,
     )
     assert output.shape == x.transpose(0, 2, 3, 1).shape
     assert next_positions.shape == positions.shape
-    assert next_velocity.shape == velocity.shape
     assert next_edge_state.shape == edge_state.shape
     assert jnp.all(next_positions <= 1.0)
     assert jnp.all(next_positions >= -1.0)
+    assert jnp.max(jnp.abs(next_positions - positions)) <= model.edge_step_size + 1e-6
 
 
 def test_conditional_pokemon_embedding_changes_model_conditioning():

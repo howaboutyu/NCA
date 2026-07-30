@@ -137,3 +137,8 @@ logs
 checkpoints
 ckpts/
 *.mp4
+
+# Local training data and generated experiment outputs.
+data/
+runs/
+web/

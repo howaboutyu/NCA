@@ -1,0 +1,42 @@
+# Same 3D NCA as the 32×32 run, with a 64×64 reconstruction surface:
+# y[B, 16, 32, 64, 64]. The supervised face remains y[:, :4, 0, :, :].
+dimensions: [64, 64]
+depth: 8
+state_channels: 32
+hidden_channels: 128
+batch_size: 4
+pool_size: 1000
+n_damage: 1
+damage_fraction: 0.1
+cutout_strategies: [left_side, circle, square]
+training_cutout_noise_probability: 0.35
+training_cutout_noise_scale: [0.0, 0.15]
+random_seed_density: 0.002
+alive_volume_penalty: 0.0
+nca_steps: 64
+validation_steps: 180
+validation_cutout_steps: [64, 100, 136]
+validation_cutout_fraction: 0.2
+rgb_voxel_visualization_frames: 24
+rgb_voxel_spatial_stride: 1
+rgb_voxel_alive_threshold: 0.1
+rgb_voxel_opacity: 0.45
+validation_every: 500
+depth_visualization_slices: 4
+pool_grid_history_frames: 64
+pool_grid_history_stride: 8
+slice_scale: 2
+update_probability: 0.5
+learning_rate: 0.0001
+state_clip: 16.0
+training_steps: 100000
+log_every: 500
+initial_validation: true
+seed: 0
+render_axis: z
+render_index: 4
+seed_depth_index: 0
+target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/pikachu.png"
+resume_checkpoint_dir: "/mnt/ssd1/data/git/NCA/runs/3d_nca16_face0_dodrio_64/checkpoints"
+run_dir: "/mnt/ssd1/data/git/NCA/runs/3d_nca16_face0_dodrio_64"
+log_dir: "/mnt/ssd1/data/git/NCA/runs/3d_nca16_face0_dodrio_64/logs"

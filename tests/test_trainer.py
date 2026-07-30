@@ -2,6 +2,7 @@ import pytest
 import jax
 import jax.numpy as jnp
 from flax.training import train_state
+from flax import core
 import optax  # type: ignore
 from dataclasses import dataclass
 import cv2  # type: ignore
@@ -15,6 +16,8 @@ from nca.trainer import (
     train_step,
     create_cell_update_fn,
     evaluate_step,
+    sample_evaluation_pokemon_id,
+    migrate_moving_edge_params,
     train_and_evaluate,
     evaluate,
 )
@@ -104,6 +107,32 @@ def test_eval_step(dummy_config, dummy_state):
 
     assert len(state_grids) == dummy_config.num_nca_steps
     assert loss.shape == ()
+
+
+def test_evaluation_samples_a_configured_conditional_id(dummy_config):
+    dummy_config.pokemon_targets = ("a.png", "b.png", "c.png")
+    sampled_ids = {
+        sample_evaluation_pokemon_id(dummy_config, jax.random.PRNGKey(seed))
+        for seed in range(12)
+    }
+
+    assert sampled_ids <= {0, 1, 2}
+    assert len(sampled_ids) > 1
+
+
+def test_checkpoint_migration_expands_conditional_embedding():
+    initialized = core.freeze(
+        {"params": {"pokemon_embedding": {"embedding": jnp.zeros((50, 2))}}}
+    )
+    restored = core.freeze(
+        {"params": {"pokemon_embedding": {"embedding": jnp.ones((5, 2))}}}
+    )
+
+    migrated = migrate_moving_edge_params(initialized, restored, 2)
+    embedding = migrated["params"]["pokemon_embedding"]["embedding"]
+
+    np.testing.assert_array_equal(embedding[:5], np.ones((5, 2)))
+    np.testing.assert_array_equal(embedding[5:], np.zeros((45, 2)))
 
 
 def test_training_and_evaluation(dummy_config):

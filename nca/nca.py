@@ -184,7 +184,6 @@ def cell_update(
     state_clip: float = 16.0,
     owner_alive: Optional[jax.Array] = None,
     edge_pos: Optional[jax.Array] = None,
-    edge_velocity: Optional[jax.Array] = None,
     edge_state: Optional[jax.Array] = None,
 ) -> jnp.ndarray:
     """
@@ -230,11 +229,10 @@ def cell_update(
         state_grid=state_grid,
         owner_alive=owner_alive,
         edge_pos=edge_pos,
-        edge_velocity=edge_velocity,
         edge_state=edge_state,
     )
     if edge_pos is not None:
-        ds, next_edge_pos, next_edge_velocity, next_edge_state = model_output
+        ds, next_edge_pos, next_edge_state = model_output
     else:
         ds = model_output
 
@@ -267,7 +265,6 @@ def cell_update(
         return (
             state_grid,
             next_edge_pos,
-            next_edge_velocity,
             next_edge_state,
         )
     return state_grid

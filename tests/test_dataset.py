@@ -80,3 +80,78 @@ def test_random_cutouts(generator: NCADataGenerator):
     assert masked_data.shape == data_nchw.shape
 
     masked_data = generator.random_cutout_rect(data_nchw, seed=0)
+    assert masked_data.shape == data_nchw.shape
+
+
+def test_random_cutout_noise_keeps_damaged_cells_dead():
+    data = np.ones((4, 8, 16, 16), dtype=np.float32)
+    damaged = np.asarray(
+        NCADataGenerator.random_cutout(
+            data,
+            seed=3,
+            strategies=("left_side",),
+            left_width_factor_range=(0.5, 0.5),
+            noise_probability=1.0,
+            noise_scale=(0.4, 0.4),
+        )
+    )
+
+    # RGB may contain visual noise, but alpha and hidden state must be killed.
+    assert np.any(damaged[:, :3, :, :8] > 0.0)
+    assert np.all(damaged[:, 3:, :, :8] == 0.0)
+    assert np.all(damaged[:, :, :, 8:] == 1.0)
+
+
+def test_random_side_cutouts_vary_edge_and_always_add_rgb_noise():
+    data = np.ones((1, 8, 32, 32), dtype=np.float32)
+    damaged_edges = set()
+
+    for seed in range(24):
+        damaged = np.asarray(
+            NCADataGenerator.random_cutout(
+                data,
+                seed=seed,
+                strategies=("random_side",),
+                left_width_factor_range=(0.25, 0.25),
+                noise_probability=1.0,
+                noise_scale=(0.3, 0.3),
+            )
+        )
+        dead = damaged[0, 3] == 0.0
+        if np.all(dead[:, :8]):
+            damaged_edges.add("left")
+        if np.all(dead[:, -8:]):
+            damaged_edges.add("right")
+        if np.all(dead[:8, :]):
+            damaged_edges.add("top")
+        if np.all(dead[-8:, :]):
+            damaged_edges.add("bottom")
+
+        assert np.any(damaged[0, :3, dead] > 0.0)
+        assert np.all(damaged[0, 3:, dead] == 0.0)
+
+    assert damaged_edges == {"left", "right", "top", "bottom"}
+
+
+def test_ellipse_cutout_varies_geometry_and_keeps_state_dead():
+    data = np.ones((1, 8, 32, 32), dtype=np.float32)
+    masks = []
+    for seed in range(4):
+        damaged = np.asarray(
+            NCADataGenerator.random_cutout(
+                data,
+                seed=seed,
+                strategies=("ellipse",),
+                square_height_factor_range=(0.2, 0.6),
+                square_width_factor_range=(0.1, 0.5),
+                noise_probability=1.0,
+                noise_scale=(0.2, 0.6),
+            )
+        )
+        dead = damaged[0, 3] == 0.0
+        masks.append(dead)
+        assert np.any(dead)
+        assert np.any(damaged[0, :3, dead] > 0.0)
+        assert np.all(damaged[0, 3:, dead] == 0.0)
+
+    assert any(not np.array_equal(masks[0], mask) for mask in masks[1:])
