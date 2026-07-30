@@ -20,6 +20,9 @@ learning_rate: 0.0001
 training_steps: 10000
 log_every: 50
 checkpoint_every: 500
+eval_every: 500
+eval_seed_depth_index: 2
+eval_seed_axis_index: 3
 seed: 0
 target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/pikachu.png"
 run_dir: "/mnt/ssd1/data/git/NCA/runs/4d_conv_pikachu_z2"

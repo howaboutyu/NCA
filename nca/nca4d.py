@@ -181,6 +181,35 @@ def rollout_4d(
     return state_ncdhwa
 
 
+def rollout_4d_frames(
+    key: jax.Array,
+    state_ncdhwa: jax.Array,
+    model: UpdateModel4D,
+    params: object,
+    steps: int,
+    update_probability: float = 0.5,
+    state_clip: float = 16.0,
+    pokemon_ids: jax.Array | None = None,
+) -> jax.Array:
+    """Return every state in a Conv4D rollout for evaluation GIFs."""
+
+    def scan_step(current_state: jax.Array, step_key: jax.Array):
+        next_state = cell_update_4d(
+            step_key,
+            current_state,
+            model,
+            params,
+            update_probability,
+            state_clip,
+            pokemon_ids,
+        )
+        return next_state, next_state
+
+    step_keys = jax.random.split(key, steps)
+    _, frames = jax.lax.scan(scan_step, state_ncdhwa, step_keys)
+    return frames
+
+
 def render_xy_plane_4d(
     state_ncdhwa: jax.Array, z_index: int, a_index: int
 ) -> jax.Array:

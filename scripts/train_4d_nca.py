@@ -12,7 +12,13 @@ from flax.training import checkpoints, train_state
 from tensorboardX import SummaryWriter
 
 from nca.dataset import NCADataGenerator
-from nca.nca4d import UpdateModel4D, project_xy_over_a_4d, rollout_4d, seed_volume_4d
+from nca.nca4d import (
+    UpdateModel4D,
+    project_xy_over_a_4d,
+    rollout_4d,
+    rollout_4d_frames,
+    seed_volume_4d,
+)
 from nca.utils import make_gif
 
 
@@ -26,6 +32,70 @@ def foreground_weighted_mse(
 def rgba_to_rgb(face: np.ndarray) -> np.ndarray:
     face = np.clip(face, 0.0, 1.0)
     return np.transpose(face[:3] * face[3:4], (1, 2, 0))
+
+
+def a_gallery_frame(volume: np.ndarray, z_index: int) -> np.ndarray:
+    """Show exact A-axis slices side by side at one Z plane."""
+    return np.concatenate(
+        [rgba_to_rgb(volume[:, z_index, :, :, axis]) for axis in range(volume.shape[-1])],
+        axis=1,
+    )
+
+
+def z_gallery_frame(volume: np.ndarray) -> np.ndarray:
+    """Show A-composited XY projections for every Z slice."""
+    return np.concatenate(
+        [rgba_to_rgb(np.asarray(project_xy_over_a_4d(jnp.asarray(volume[None]), z))[0])
+         for z in range(volume.shape[1])],
+        axis=1,
+    )
+
+
+def evaluate_and_write_gifs(
+    state: train_state.TrainState,
+    model: UpdateModel4D,
+    eval_seed: jax.Array,
+    target: jax.Array,
+    eval_key: jax.Array,
+    config: dict,
+    run_dir: str,
+    writer: SummaryWriter,
+    step: int,
+) -> None:
+    """Run a deterministic evaluation rollout and write 4D-aware GIFs."""
+    frames = rollout_4d_frames(
+        eval_key,
+        eval_seed,
+        model,
+        state.params,
+        config["nca_steps"],
+        update_probability=1.0,
+        state_clip=config.get("state_clip", 16.0),
+    )
+    frames_np = np.asarray(frames)
+    z_index = config.get("projection_z_index", config["depth"] // 2)
+    projection_frames = [
+        rgba_to_rgb(np.asarray(project_xy_over_a_4d(frame, z_index)[0]))
+        for frame in frames_np
+    ]
+    a_frames = [a_gallery_frame(frame[0], z_index) for frame in frames_np]
+    z_frames = [z_gallery_frame(frame[0]) for frame in frames_np]
+    eval_dir = os.path.join(run_dir, "evaluation")
+    os.makedirs(eval_dir, exist_ok=True)
+    make_gif(projection_frames, os.path.join(eval_dir, f"{step:06d}_reconstruction.gif"), fps=8)
+    make_gif(a_frames, os.path.join(eval_dir, f"{step:06d}_a_slices.gif"), fps=8)
+    make_gif(z_frames, os.path.join(eval_dir, f"{step:06d}_z_slices.gif"), fps=8)
+
+    final_projection = project_xy_over_a_4d(frames[-1], z_index)
+    eval_loss = foreground_weighted_mse(
+        final_projection, target, config.get("foreground_weight", 1.0)
+    )
+    alive = frames[-1][:, 3] > config.get("alive_threshold", 0.1)
+    off_z = jnp.concatenate([alive[:, :z_index], alive[:, z_index + 1 :]], axis=1)
+    writer.add_scalar("eval/reconstruction_loss", float(eval_loss), step)
+    writer.add_scalar("eval/off_target_alive", float(jnp.mean(off_z)), step)
+    writer.add_image("eval/reconstruction", np.asarray(final_projection[0]), step, dataformats="CHW")
+    writer.flush()
 
 
 def main() -> None:
@@ -59,6 +129,17 @@ def main() -> None:
         config.get("seed_axis_index", 0),
         config.get("random_seed_density", 0.0),
         jax.random.PRNGKey(config.get("seed", 0)),
+    )
+    eval_seed = seed_volume_4d(
+        config["batch_size"],
+        config["state_channels"],
+        config["depth"],
+        height,
+        width,
+        config["axis_size"],
+        config.get("eval_seed_depth_index", config.get("projection_z_index", config["depth"] // 2)),
+        config.get("eval_seed_axis_index", (config.get("seed_axis_index", 0) + 1) % config["axis_size"]),
+        0.0,
     )
     model = UpdateModel4D(
         state_channels=config["state_channels"],
@@ -140,6 +221,11 @@ def main() -> None:
         if step % config["checkpoint_every"] == 0:
             checkpoints.save_checkpoint(
                 checkpoint_dir, state, step=state.step, keep=3, overwrite=True
+            )
+        if step % config.get("eval_every", config["training_steps"] + 1) == 0:
+            key, eval_key = jax.random.split(key)
+            evaluate_and_write_gifs(
+                state, model, eval_seed, target, eval_key, config, run_dir, writer, step
             )
 
     checkpoints.save_checkpoint(checkpoint_dir, state, step=state.step, keep=3, overwrite=True)
