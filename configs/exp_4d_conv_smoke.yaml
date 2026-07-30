@@ -1,0 +1,14 @@
+# Minimal Conv4D smoke configuration. State layout is N,C,Z,Y,X,A.
+dimensions: [8, 8]
+depth: 4
+axis_size: 3
+state_channels: 8
+hidden_channels: 16
+batch_size: 2
+nca_steps: 8
+update_probability: 1.0
+state_clip: 16.0
+seed_depth_index: 1
+seed_axis_index: 1
+random_seed_density: 0.0
+projection: alpha_composite_over_a
