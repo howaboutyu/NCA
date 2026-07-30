@@ -1,0 +1,25 @@
+# First non-smoke Conv4D Pokemon run. State layout is N,C,Z,Y,X,A.
+dimensions: [32, 32]
+depth: 4
+axis_size: 4
+state_channels: 8
+hidden_channels: 24
+batch_size: 1
+nca_steps: 32
+update_probability: 0.5
+state_clip: 16.0
+seed_depth_index: 2
+seed_axis_index: 0
+random_seed_density: 0.0
+projection: alpha_composite_over_a
+projection_z_index: 2
+foreground_weight: 4.0
+alive_volume_penalty: 0.0003
+alive_threshold: 0.1
+learning_rate: 0.0001
+training_steps: 10000
+log_every: 50
+checkpoint_every: 500
+seed: 0
+target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/pikachu.png"
+run_dir: "/mnt/ssd1/data/git/NCA/runs/4d_conv_pikachu_z2"
