@@ -12,3 +12,14 @@ seed_depth_index: 1
 seed_axis_index: 1
 random_seed_density: 0.0
 projection: alpha_composite_over_a
+projection_z_index: 1
+foreground_weight: 4.0
+alive_volume_penalty: 0.0003
+alive_threshold: 0.1
+learning_rate: 0.0001
+training_steps: 2000
+log_every: 50
+checkpoint_every: 500
+seed: 0
+target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/pikachu.png"
+run_dir: "/mnt/ssd1/data/git/NCA/runs/4d_conv_smoke"
