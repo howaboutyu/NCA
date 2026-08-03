@@ -12,23 +12,13 @@
 
 ---
 
-<p align="center"> A Jax implementation of Neural Cellular Automata 
-    <br> 
-    <img src="./docs/gifs/output_half.gif" alt="NCA">
-    <img src="./docs/gifs/pokemon_64ch_64x64_nosyn.gif" alt="64-channel 64x64 Pokémon reconstruction without synapses">
-
-</p>
-
-<h3 align="center">3D Conv NCA rollout</h3>
-
 <p align="center">
-  <img src="./docs/images/3d-rollout-t1.png" width="720" alt="3D Conv NCA rollout at t=1, showing depth slices z=0, z=2, z=4, z=6 and the live volume">
-  <br>
-  <em>Early volumetric rollout (t=1): numbered depth slices and the live-volume view.</em>
+  A JAX implementation of Neural Cellular Automata
+  <br><br>
+  <img src="./docs/gifs/output_half.gif" width="320" alt="Neural Cellular Automata growth">
 </p>
 
-
-<h3 align="center">Inference gallery (conditional Pokémon)</h3>
+<h3 align="center">Conditional 3D NCA showcase</h3>
 
 <p align="center">
   <img src="./docs/gifs/3d_5pokemon_latest/conditional_pokemon_showcase_latest.gif" width="720" alt="Conditional 3D NCA rollouts for Charmander, Squirtle, Pikachu, and Eevee">
