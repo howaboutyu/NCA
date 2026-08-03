@@ -1,17 +1,19 @@
+import io
+
+import imageio.v2 as imageio
 import jax
 import jax.numpy as jnp
 import numpy as np
 
+from glob import glob
+import tempfile
+import cv2  # type: ignore
+import os
+
 try:
-    # MoviePy 1.x exposed this from ``moviepy.editor``; MoviePy 2.x exports
-    # it from the package root.
     from moviepy import ImageSequenceClip  # type: ignore
 except ImportError:  # pragma: no cover - exercised with MoviePy 1.x
     from moviepy.editor import ImageSequenceClip  # type: ignore
-import tempfile
-from glob import glob
-import cv2  # type: ignore
-import os
 
 from typing import List, Any, Union
 
@@ -81,16 +83,23 @@ def make_gif(
 
     """
 
-    with tempfile.TemporaryDirectory() as tempdir:
-        # write images to tempdir
-        for i, image in enumerate(images):
-            image = np.asarray(image).astype(np.uint8)
+    with open(filename, "wb") as output_file:
+        output_file.write(encode_gif(images, fps))
 
-            cv2.imwrite(f"{tempdir}/{i}.png", image)
 
-        # create gif
-        clip = ImageSequenceClip(glob(f"{tempdir}/*.png"), fps=fps)
-        clip.write_gif(filename, fps=fps)
+def encode_gif(images: Union[List[Any], np.ndarray], fps: int = 10) -> bytes:
+    """Encode RGB frames as one looping animated GIF without console output."""
+    frames = []
+    for image in images:
+        frame = np.asarray(image)
+        if frame.size and frame.max() <= 1.0:
+            frame = frame * 255.0
+        frames.append(np.clip(frame, 0.0, 255.0).astype(np.uint8))
+    if not frames:
+        raise ValueError("Cannot encode an empty GIF")
+    buffer = io.BytesIO()
+    imageio.mimsave(buffer, frames, format="GIF", duration=1.0 / fps, loop=0)
+    return buffer.getvalue()
 
 
 def make_video(

@@ -4,6 +4,7 @@ import jax.numpy as jnp
 
 from flax.training import checkpoints, train_state
 from flax import core
+from flax.traverse_util import flatten_dict, unflatten_dict
 
 import optax  # type: ignore
 from dataclasses import dataclass
@@ -31,6 +32,63 @@ from nca.utils import make_video, NCHW_to_NHWC, mse
 # define some types
 Array = jax.Array
 FrozenDict = core.FrozenDict[str, Any]
+
+
+def migrate_moving_edge_params(
+    initialized_params: Any,
+    restored_params: Any,
+    pokemon_embedding_dim: int,
+) -> Any:
+    """Warm-start a moving-edge model from a local-only checkpoint.
+
+    Matching tensors are copied directly. ``conv_1`` needs special handling
+    because received synapse state is inserted between perception features and
+    Pokémon conditioning. The new synapse input block remains zero-initialized,
+    preserving the old model's behavior at the start of fine-tuning.
+    """
+    initialized_flat = flatten_dict(core.unfreeze(initialized_params))
+    restored_flat = flatten_dict(core.unfreeze(restored_params))
+
+    for path, restored_value in restored_flat.items():
+        if (
+            path in initialized_flat
+            and initialized_flat[path].shape == restored_value.shape
+        ):
+            initialized_flat[path] = restored_value
+
+    kernel_path = ("params", "conv_1", "kernel")
+    if kernel_path in initialized_flat and kernel_path in restored_flat:
+        new_kernel = initialized_flat[kernel_path]
+        old_kernel = restored_flat[kernel_path]
+        if new_kernel.shape[2] > old_kernel.shape[2]:
+            conditioning_width = min(
+                pokemon_embedding_dim,
+                old_kernel.shape[2],
+            )
+            perception_width = old_kernel.shape[2] - conditioning_width
+            new_kernel = new_kernel.at[:, :, :perception_width, :].set(
+                old_kernel[:, :, :perception_width, :]
+            )
+            new_kernel = new_kernel.at[
+                :, :, perception_width : new_kernel.shape[2] - conditioning_width, :
+            ].set(0.0)
+            if conditioning_width:
+                new_kernel = new_kernel.at[:, :, -conditioning_width:, :].set(
+                    old_kernel[:, :, -conditioning_width:, :]
+                )
+            initialized_flat[kernel_path] = new_kernel
+
+    embedding_path = ("params", "pokemon_embedding", "embedding")
+    if embedding_path in initialized_flat and embedding_path in restored_flat:
+        new_embedding = initialized_flat[embedding_path]
+        old_embedding = restored_flat[embedding_path]
+        if new_embedding.shape[1:] == old_embedding.shape[1:]:
+            copied_rows = min(new_embedding.shape[0], old_embedding.shape[0])
+            initialized_flat[embedding_path] = new_embedding.at[:copied_rows].set(
+                old_embedding[:copied_rows]
+            )
+
+    return core.freeze(unflatten_dict(initialized_flat))
 
 
 def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
@@ -76,7 +134,6 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
         nonlocal_attention_dim=config.nonlocal_attention_dim,
         edge_count=config.edge_count,
         edge_state_dim=config.edge_state_dim,
-        edge_momentum=config.edge_momentum,
         edge_step_size=config.edge_step_size,
         edge_state_step_size=config.edge_state_step_size,
         edge_message_scale=config.edge_message_scale,
@@ -107,38 +164,59 @@ def create_state(config: NCAConfig) -> Tuple[train_state.TrainState, Any]:
             os.path.abspath(config.weights_dir), target=None
         )
 
-    if restored_dict == None:
-        init_kwargs = {
-            "pokemon_ids": jnp.zeros((1,), dtype=jnp.int32),
-        }
-        if config.nonlocal_connections and config.nonlocal_mode == "moving_edges":
-            init_kwargs.update(
-                state_grid=jnp.zeros(
-                    (1, config.model_output_len, *config.dimensions),
-                    dtype=dummy_data.dtype,
-                ),
-                edge_pos=jnp.zeros(
-                    (1, *config.dimensions, config.edge_count, 2),
-                    dtype=dummy_data.dtype,
-                ),
-                edge_velocity=jnp.zeros(
-                    (1, *config.dimensions, config.edge_count, 2),
-                    dtype=dummy_data.dtype,
-                ),
-                edge_state=jnp.zeros(
-                    (1, *config.dimensions, config.edge_count, config.edge_state_dim),
-                    dtype=dummy_data.dtype,
-                ),
-            )
-        params = model.init(
-            jax.random.PRNGKey(0),
-            dummy_data,
-            **init_kwargs,
+    init_kwargs = {
+        "pokemon_ids": jnp.zeros((1,), dtype=jnp.int32),
+    }
+    if config.nonlocal_connections and config.nonlocal_mode == "moving_edges":
+        init_kwargs.update(
+            state_grid=jnp.zeros(
+                (1, config.model_output_len, *config.dimensions),
+                dtype=dummy_data.dtype,
+            ),
+            edge_pos=jnp.zeros(
+                (1, *config.dimensions, config.edge_count, 2),
+                dtype=dummy_data.dtype,
+            ),
+            edge_state=jnp.zeros(
+                (1, *config.dimensions, config.edge_count, config.edge_state_dim),
+                dtype=dummy_data.dtype,
+            ),
         )
+    initialized_params = model.init(
+        jax.random.PRNGKey(0),
+        dummy_data,
+        **init_kwargs,
+    )
+
+    if restored_dict == None:
+        params = initialized_params
         print("Initializing params from scratch")
     else:
         print(f"Loading params from ckpt {config.weights_dir}")
-        params = restored_dict["params"]
+        restored_params = restored_dict["params"]
+        initialized_flat = flatten_dict(core.unfreeze(initialized_params))
+        restored_flat = flatten_dict(core.unfreeze(restored_params))
+        has_shape_mismatch = any(
+            path in initialized_flat
+            and initialized_flat[path].shape != restored_value.shape
+            for path, restored_value in restored_flat.items()
+        )
+        if (
+            has_shape_mismatch
+            or (
+                config.nonlocal_connections
+                and config.nonlocal_mode == "moving_edges"
+                and "edge_net" not in restored_params.get("params", {})
+            )
+        ):
+            params = migrate_moving_edge_params(
+                initialized_params,
+                restored_params,
+                config.pokemon_embedding_dim if config.pokemon_targets else 0,
+            )
+            print("Migrated checkpoint parameters to the current model shape")
+        else:
+            params = restored_params
 
     # Create a TrainState object to hold the model state and optimizer state
     state = train_state.TrainState.create(
@@ -190,7 +268,6 @@ def create_cell_update_fn(
         pokemon_ids=None,
         owner_alive=None,
         edge_pos=None,
-        edge_velocity=None,
         edge_state=None,
     ):
         # call the cell_update function with the provided inputs and the perception kernels
@@ -211,7 +288,6 @@ def create_cell_update_fn(
             state_clip=config.state_clip,
             owner_alive=owner_alive,
             edge_pos=edge_pos,
-            edge_velocity=edge_velocity,
             edge_state=edge_state,
         )
 
@@ -234,7 +310,6 @@ def nca_looper(
     return_edge_history: bool = False,
 ) -> Tuple[Array, Array]:
     edge_pos = None
-    edge_velocity = None
     edge_state = None
     if edge_count > 0:
         init_key, key = jax.random.split(key)
@@ -245,7 +320,6 @@ def nca_looper(
             minval=-1.0,
             maxval=1.0,
         )
-        edge_velocity = jnp.zeros_like(edge_pos)
         edge_state = jnp.zeros(
             (batch, height, width, edge_count, edge_state_dim),
             dtype=jnp.float32,
@@ -262,11 +336,10 @@ def nca_looper(
             pokemon_ids,
             owner_alive,
             edge_pos,
-            edge_velocity,
             edge_state,
         )
         if edge_count > 0:
-            state_grid, edge_pos, edge_velocity, edge_state = result
+            state_grid, edge_pos, edge_state = result
         else:
             state_grid = result
         state_grid_sequence.append(state_grid)
@@ -392,6 +465,95 @@ def evaluate_step(
     return state_grids, loss_value
 
 
+def sample_evaluation_pokemon_id(config: NCAConfig, key: Array) -> int:
+    """Select one configured conditional target for a validation rollout."""
+    target_count = len(config.pokemon_targets)
+    if target_count <= 1 or not config.eval_random_pokemon_id:
+        return 0
+    return int(jax.random.randint(key, (), 0, target_count))
+
+
+def evaluate_damage_rollout(
+    config: NCAConfig,
+    state: train_state.TrainState,
+    state_grid: Array,
+    cell_update_fn: Callable,
+    pokemon_ids: Optional[Array] = None,
+    key: Array = jax.random.PRNGKey(0),
+    return_edge_history: bool = False,
+) -> Tuple[Array, Optional[Array]]:
+    """Run evaluation while applying scheduled randomized cutouts.
+
+    Unlike restarting ``nca_looper`` for each segment, this preserves moving
+    synapse positions and state across every damage event.
+    """
+    edge_pos = None
+    edge_state = None
+    edge_count = (
+        config.edge_count
+        if config.nonlocal_connections and config.nonlocal_mode == "moving_edges"
+        else 0
+    )
+    if edge_count > 0:
+        init_key, key = jax.random.split(key)
+        batch, _, height, width = state_grid.shape
+        edge_pos = jax.random.uniform(
+            init_key,
+            (batch, height, width, edge_count, 2),
+            minval=-1.0,
+            maxval=1.0,
+        )
+        edge_state = jnp.zeros(
+            (batch, height, width, edge_count, config.edge_state_dim),
+            dtype=jnp.float32,
+        )
+
+    start = max(0, int(config.inference_cutout_start_step))
+    interval = int(config.inference_cutout_interval_steps)
+    frames = []
+    edge_frames = []
+    for step in range(config.total_eval_steps):
+        should_damage = (
+            config.inference_apply_cutout
+            and interval > 0
+            and step >= start
+            and (step - start) % interval == 0
+        )
+        if should_damage:
+            state_grid = NCADataGenerator.random_cutout(
+                state_grid,
+                seed=step,
+                strategies=config.inference_cutout_strategies,
+                square_height_factor_range=config.inference_cutout_square_height_factor_range,
+                square_width_factor_range=config.inference_cutout_square_width_factor_range,
+                left_width_factor_range=config.inference_cutout_left_width_factor_range,
+                noise_probability=config.inference_cutout_noise_probability,
+                noise_scale=config.inference_cutout_noise_scale,
+            )
+
+        _, key = jax.random.split(key)
+        owner_alive = alive_masking(state_grid[:, 3, :, :])
+        result = cell_update_fn(
+            key,
+            state_grid,
+            state.params,
+            pokemon_ids,
+            owner_alive,
+            edge_pos,
+            edge_state,
+        )
+        if edge_count > 0:
+            state_grid, edge_pos, edge_state = result
+            if return_edge_history:
+                edge_frames.append(edge_pos)
+        else:
+            state_grid = result
+        frames.append(state_grid)
+
+    edge_history = jnp.asarray(edge_frames) if edge_frames else None
+    return jnp.asarray(frames), edge_history
+
+
 def make_connection_overlay_video(
     images: list[np.ndarray],
     edge_positions: np.ndarray,
@@ -515,8 +677,10 @@ def train_and_evaluate(config: NCAConfig):
     train_step_jit = jax.jit(p_train_step)
 
     for step in range(state.step, config.total_training_steps):
+        key, sample_key, permute_key, cutoff_key, train_key, eval_key = jax.random.split(key, 6)
+
         # get the training data
-        state_grids, state_grid_indices = dataset_generator.sample(key, damage=False)
+        state_grids, state_grid_indices = dataset_generator.sample(sample_key, damage=False)
         pokemon_ids = dataset_generator.pool_pokemon_ids[state_grid_indices]
         batch_indices = np.arange(config.batch_size)
         train_target = targets_by_pokemon[pokemon_ids, batch_indices]
@@ -540,15 +704,21 @@ def train_and_evaluate(config: NCAConfig):
         if config.n_damage > 0:
             # replace best performing states (config.n_damage) grids with random cutouts
             state_grids_ranked[-config.n_damage :] = (
-                NCADataGenerator.random_cutout_circle(
+                NCADataGenerator.random_cutout(
                     state_grids_ranked[-config.n_damage :],
-                    int(key[0]),  # type: ignore
+                    int(cutoff_key[0]),  # type: ignore
+                    strategies=config.train_cutout_strategies,
+                    square_height_factor_range=config.train_cutout_square_height_factor_range,
+                    square_width_factor_range=config.train_cutout_square_width_factor_range,
+                    left_width_factor_range=config.train_cutout_left_width_factor_range,
+                    noise_probability=config.train_cutout_noise_probability,
+                    noise_scale=config.train_cutout_noise_scale,
                 )
             )
 
         # shuffle
         shuffled_idx = jax.random.permutation(
-            key, jnp.arange(state_grids_ranked.shape[0])
+            permute_key, jnp.arange(state_grids_ranked.shape[0])
         )
         shuffled_idx = np.asarray(shuffled_idx)
         state_grids_ranked = state_grids_ranked[shuffled_idx]
@@ -561,7 +731,7 @@ def train_and_evaluate(config: NCAConfig):
             loss,
             training_grid_array,
         ) = train_step_jit(
-            key,
+            train_key,
             state,
             state_grids_ranked,
             target_ranked,
@@ -599,14 +769,16 @@ def train_and_evaluate(config: NCAConfig):
             # Evaluate the model starting with a seed state and propagate for `config.total_eval_steps` steps
             # The gif is also logged with tensorboardX
             seed_grid = dataset_generator.seed_state[np.newaxis, ...]
+            eval_pokemon_id = sample_evaluation_pokemon_id(config, eval_key)
+            eval_pokemon_ids = jnp.array([eval_pokemon_id], dtype=jnp.int32)
 
             evaluation_result = evaluate_step(
                 state,
                 seed_grid,
-                targets_by_pokemon[:1],
+                targets_by_pokemon[eval_pokemon_id : eval_pokemon_id + 1],
                 cell_update_fn,
                 num_nca_steps=config.total_eval_steps,
-                pokemon_ids=jnp.zeros((1,), dtype=jnp.int32),
+                pokemon_ids=eval_pokemon_ids,
                 edge_count=(
                     config.edge_count
                     if config.nonlocal_connections
@@ -626,8 +798,9 @@ def train_and_evaluate(config: NCAConfig):
                 edge_positions = None
 
             tb_writer.add_scalar("val_loss", np.asarray(loss), state.step)
+            tb_writer.add_scalar("val_pokemon_id", eval_pokemon_id, state.step)
             tb_writer.add_image(
-                "target_img", np.asarray(targets_by_pokemon[0, 0]), state.step
+                "target_img", np.asarray(targets_by_pokemon[eval_pokemon_id, 0]), state.step
             )
 
             tb_state_grids = np.array(val_state_grids)
@@ -649,6 +822,34 @@ def train_and_evaluate(config: NCAConfig):
             os.makedirs(config.validation_video_dir, exist_ok=True)
             output_video_file = os.path.join(config.validation_video_dir, f"{step}.mp4")
             make_video(val_state_grids, output_video_file)
+
+            if config.inference_apply_cutout:
+                damage_state_grids, _ = evaluate_damage_rollout(
+                    config=config,
+                    state=state,
+                    state_grid=seed_grid,
+                    cell_update_fn=cell_update_fn,
+                    pokemon_ids=eval_pokemon_ids,
+                )
+                damage_video = np.clip(
+                    np.squeeze(np.asarray(damage_state_grids)), 0.0, 1.0
+                )
+                damage_alpha = damage_video[:, 3:4] > 0.1
+                damage_rgb = damage_alpha * damage_video[:, :3]
+                tb_writer.add_video(
+                    "val_damage_video",
+                    vid_tensor=damage_rgb[np.newaxis, ...],
+                    fps=30,
+                    global_step=state.step,
+                )
+                damage_video_file = os.path.join(
+                    config.validation_video_dir, f"{step}_damage.mp4"
+                )
+                make_video(
+                    np.transpose(damage_rgb, (0, 2, 3, 1)),
+                    damage_video_file,
+                )
+
             if edge_positions is not None:
                 connection_video_file = os.path.join(
                     config.validation_video_dir, f"{step}_connections.mp4"
@@ -675,26 +876,152 @@ def train_and_evaluate(config: NCAConfig):
                 os.path.abspath(config.checkpoint_dir), state, step=state.step, keep=3
             )
 
-        # split the key for the next step
-        key, _ = jax.random.split(key)
-
 
 def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None:
-    """This function evaluates the model for `config.total_eval_steps` steps starting with a seed state.
-        The output is a video (mp4) of the NCA propagation.
+    """This function evaluates one Pokémon id for `config.total_eval_steps` steps.
 
     Args:
         config (NCAConfig): The config object.
         output_video_path (optional):
             Where to save the video path, (sometime like /abc/eval.mp4). Defaults to None.
-            if none then the video is saved to `config.evaluation_video_file`
+            if none then the video is saved to `config.evaluation_video_file`.
     """
+    pokemon_id = sample_evaluation_pokemon_id(
+        config, jax.random.PRNGKey(config.eval_seed_random_seed)
+    )
+    pokemon_ids = jnp.array([pokemon_id], dtype=jnp.int32)
+    evaluate_for_pokemon_id(
+        config=config,
+        output_video_path=output_video_path,
+        pokemon_id=pokemon_id,
+        pokemon_ids=pokemon_ids,
+    )
+
+
+def evaluate_for_pokemon_id(
+    config: NCAConfig,
+    output_video_path: Optional[str],
+    pokemon_id: int = 0,
+    pokemon_ids: Optional[Array] = None,
+) -> None:
+    """Evaluate one conditional id and save a cutout video.
+
+    Args:
+        config: Run-time config.
+        output_video_path: Output file path for the rendered movie.
+        pokemon_id: Which Pokémon id to condition on.
+        pokemon_ids: Optional pre-broadcasted condition tensor.
+    """
+
+    if pokemon_ids is None:
+        pokemon_ids = jnp.array([pokemon_id], dtype=jnp.int32)
+
+    # create_state restores config.weights_dir only as initialization, then
+    # restores config.checkpoint_dir on top of it. Do not restore weights_dir
+    # again here: that would silently replace the trained inference checkpoint
+    # with the older initialization checkpoint.
     state, _ = create_state(config)
 
-    if config.weights_dir:
-        state = checkpoints.restore_checkpoint(os.path.abspath(config.weights_dir), state)
+    # Match training-time eval: use the non-jit cell update path so inference
+    # videos are directly comparable to val videos logged during training.
+    cell_update_fn = create_cell_update_fn(config, state.apply_fn, use_jit=False)
 
-    cell_update_fn = create_cell_update_fn(config, state.apply_fn)
+    dataset_generator = NCADataGenerator(
+        pool_size=config.pool_size,
+        batch_size=config.batch_size,
+        dimensions=config.dimensions,
+        model_output_len=config.model_output_len,
+        seed_density=config.seed_density,
+        seed_noise_density=config.seed_noise_density,
+        seed_random_seed=config.seed_random_seed,
+        seed_pattern=config.seed_pattern,
+        seed_size=config.seed_size,
+        pokemon_targets=config.pokemon_targets,
+    )
+
+    state_grid = np.array(dataset_generator.seed_state, copy=True)[np.newaxis, ...]
+    if config.eval_seed_density > 0.0 or config.eval_seed_noise_density > 0.0:
+        rng = np.random.default_rng(config.eval_seed_random_seed)
+        # Keep the Poké Ball icon if configured and add random live cells for
+        # additional entropy in evaluation.
+        random_mask = rng.random(config.dimensions) < config.eval_seed_density
+        if config.seed_pattern == "pokeball":
+            random_mask &= np.asarray(state_grid[0, 3]) <= 0.0
+        state_grid[0, 3:, random_mask] = 1.0
+
+        if config.eval_seed_noise_density > 0.0:
+            noise_mask = rng.random(config.dimensions) < config.eval_seed_noise_density
+            if config.seed_pattern == "pokeball":
+                noise_mask &= np.asarray(state_grid[0, 3]) <= 0.0
+            state_grid[0, :3, noise_mask] = rng.random(
+                (3, int(np.count_nonzero(noise_mask)))
+            )
+            state_grid[0, 3:, noise_mask] = 1.0
+    key = jax.random.PRNGKey(0)
+    # Keep evaluation RNG aligned with training-time eval, which uses an
+    # unshifted seed at inference/eval call sites. Pokémon conditioning is
+    # controlled explicitly through `pokemon_ids`.
+    if config.inference_apply_cutout:
+        state_grid_cache, _ = evaluate_damage_rollout(
+            config=config,
+            state=state,
+            state_grid=state_grid,
+            cell_update_fn=cell_update_fn,
+            pokemon_ids=pokemon_ids,
+            key=key,
+        )
+        state_grid_cache = jnp.squeeze(state_grid_cache)
+    else:
+        eval_result = evaluate_step(
+            state=state,
+            state_grid=state_grid,
+            target=state_grid[:, :4],
+            cell_update_fn=cell_update_fn,
+            num_nca_steps=config.total_eval_steps,
+            pokemon_ids=pokemon_ids,
+            edge_count=(
+                config.edge_count
+                if config.nonlocal_connections
+                and config.nonlocal_mode == "moving_edges"
+                else 0
+            ),
+            edge_state_dim=config.edge_state_dim,
+            return_edge_history=config.nonlocal_connections
+            and config.nonlocal_mode == "moving_edges",
+        )
+        state_grid_array = eval_result[0] if isinstance(eval_result, tuple) else eval_result
+        state_grid_cache = jnp.squeeze(state_grid_array)
+    # Optional debug dump of rollout cache for local inspection.
+    # Disabled by default to avoid unnecessary device-to-host transfers.
+    if os.environ.get("NCA_SAVE_STATE_GRID_CACHE") == "1":
+        np.save("/tmp/state_grid_cache.npy", np.asarray(state_grid_cache))
+
+    state_grid_cache = jnp.clip(state_grid_cache, 0.0, 1.0)
+    rgb = np.array(state_grid_cache)[:, :3]
+    # Match training eval rendering (alpha thresholding then background composite).
+    if rgb.ndim == 4:
+        alpha = np.asarray(state_grid_cache)[:, 3:4] > 0.1
+        rgb = alpha * np.asarray(state_grid_cache)[:, :3]
+        # NCHW -> NHWC
+        rgb = np.transpose(rgb, (0, 2, 3, 1))
+    else:
+        alpha = np.asarray(state_grid_cache)[..., 3:4] > 0.1
+        rgb = alpha * np.asarray(state_grid_cache)[..., :3]
+
+    if output_video_path is None:
+        make_video(rgb, config.evaluation_video_file)
+    else:
+        make_video(rgb, output_video_path)
+
+
+def evaluate_all_pokemon(config: NCAConfig, output_dir: str) -> None:
+    """Run conditional inference and save one cutout MP4 per Pokémon id."""
+    output_dir = os.path.abspath(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+
+    pokemon_targets = tuple(config.pokemon_targets)
+    if not pokemon_targets or pokemon_targets == (None,):
+        pokemon_targets = (config.target_filename,)
 
     dataset_generator = NCADataGenerator(
         pool_size=config.pool_size,
@@ -705,73 +1032,21 @@ def evaluate(config: NCAConfig, output_video_path: Optional[str] = None) -> None
         seed_random_seed=config.seed_random_seed,
         seed_pattern=config.seed_pattern,
         seed_size=config.seed_size,
-        pokemon_targets=config.pokemon_targets,
+        pokemon_targets=pokemon_targets,
     )
 
-    nca_looper_fn = partial(
-        nca_looper,
-        cell_update_fn=cell_update_fn,
-        num_nca_steps=config.num_nca_steps,
-        pokemon_ids=jnp.zeros((1,), dtype=jnp.int32),
-        edge_count=(
-            config.edge_count
-            if config.nonlocal_connections and config.nonlocal_mode == "moving_edges"
-            else 0
-        ),
-        edge_state_dim=config.edge_state_dim,
-    )
+    total = len(pokemon_targets)
+    if total == 0:
+        raise ValueError("No Pokémon targets are configured for conditional inference")
 
-    nca_looper_fn = jax.jit(nca_looper_fn)  # type: ignore
-
-    num_loops = int(config.total_eval_steps // config.num_nca_steps)
-
-    state_grid = dataset_generator.seed_state[np.newaxis, ...]
-    state_grid_cache = []
-
-    key = jax.random.PRNGKey(0)
-    for n in range(num_loops):
-        _, state_grid_array = nca_looper_fn(key, state.params, state_grid)
-        state_grid = state_grid_array[-1]
-        state_grid_cache.append(jnp.squeeze(state_grid_array))
-
-        ###  Some cutout strategies ###
-        # 1) split the grid into two and make one half black
-        #
-        # state_grid = np.asarray(state_grid).copy()
-        # state_grid[:, : ,  : , :state_grid.shape[2]//2] = 0.0
-
-        # 2) make a random rectange cutouts
-        state_grid = NCADataGenerator.random_cutout_rect(
-            state_grid,
-            height_factor=0.2,
-            width_factor=0.2,
-            seed=int(key[0]),  # type: ignore
+    for pokemon_id in range(total):
+        target_name = os.path.splitext(os.path.basename(pokemon_targets[pokemon_id]))[0]
+        output_video_path = os.path.join(
+            output_dir,
+            f"pokemon_{pokemon_id:02d}_{target_name}_cutout.mp4",
         )
-
-        key, _ = jax.random.split(key)
-
-    state_grid_cache = jnp.array(state_grid_cache)  # type: ignore
-
-    state_grid_cache = jnp.concatenate(state_grid_cache, axis=0)
-    # save the entire state_grid_cache as npy.
-    # TODO: add path to config.
-
-    np.save("/tmp/state_grid_cache.npy", state_grid_cache)
-
-    state_grid_cache = jnp.clip(state_grid_cache, 0.0, 1.0)
-
-    rgba = np.asarray(state_grid_cache)[:, 0:4]
-
-    rgb = rgba[:, :3] * rgba[:, 3:4]
-    # NCHW -> NHWC
-    rgb = jnp.transpose(rgb, (0, 2, 3, 1))
-
-    # Resize through JAX so evaluation does not initialize a second GPU
-    # runtime (TensorFlow and JAX competing for the same CUDA context).
-    rgb = jax.image.resize(rgb, (rgb.shape[0], 256, 256, 3), method="nearest")
-    rgb = np.asarray(rgb)
-
-    if output_video_path is None:
-        make_video(rgb, config.evaluation_video_file)
-    else:
-        make_video(rgb, output_video_path)
+        evaluate_for_pokemon_id(
+            config=config,
+            output_video_path=output_video_path,
+            pokemon_id=pokemon_id,
+        )

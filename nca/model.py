@@ -53,7 +53,6 @@ class UpdateModel(nn.Module):
     nonlocal_attention_dim: int = 32
     edge_count: int = 4
     edge_state_dim: int = 16
-    edge_momentum: float = 0.9
     edge_step_size: float = 0.05
     edge_state_step_size: float = 0.05
     edge_message_scale: float = 0.25
@@ -114,7 +113,6 @@ class UpdateModel(nn.Module):
         state_grid: jnp.ndarray | None = None,
         owner_alive: jnp.ndarray | None = None,
         edge_pos: jnp.ndarray | None = None,
-        edge_velocity: jnp.ndarray | None = None,
         edge_state: jnp.ndarray | None = None,
     ) -> jnp.ndarray:
         """Apply the model to an input tensor.
@@ -150,10 +148,9 @@ class UpdateModel(nn.Module):
                 gate = nn.sigmoid(self.context_gate(perception_vector))
                 global_context = gate * global_context
             elif self.nonlocal_mode == "moving_edges":
-                if state_grid is None or edge_pos is None or edge_velocity is None or edge_state is None:
+                if state_grid is None or edge_pos is None or edge_state is None:
                     raise ValueError(
-                        "moving_edges requires state_grid, edge_pos, "
-                        "edge_velocity, and edge_state"
+                        "moving_edges requires state_grid, edge_pos, and edge_state"
                     )
                 if owner_alive is None:
                     owner_alive = jnp.ones(
@@ -166,13 +163,11 @@ class UpdateModel(nn.Module):
                 )
                 edge_input = jnp.concatenate([edge_owner, edge_state], axis=-1)
                 edge_delta = self.edge_net(edge_input)
-                acceleration = jnp.tanh(edge_delta[..., :2])
-                next_velocity = (
-                    self.edge_momentum * edge_velocity
-                    + self.edge_step_size * acceleration
+                displacement = self.edge_step_size * jnp.tanh(
+                    edge_delta[..., :2]
                 )
                 next_position = jnp.clip(
-                    edge_pos + next_velocity, -1.0, 1.0
+                    edge_pos + displacement, -1.0, 1.0
                 )
                 next_edge_state = edge_state + self.edge_state_step_size * jnp.tanh(
                     edge_delta[..., 2:]
@@ -180,7 +175,6 @@ class UpdateModel(nn.Module):
                 next_edge_state = 4.0 * jnp.tanh(next_edge_state / 4.0)
                 owner_gate = owner_alive[..., None, None]
                 next_position = jnp.where(owner_gate, next_position, edge_pos)
-                next_velocity = jnp.where(owner_gate, next_velocity, edge_velocity)
                 next_edge_state = jnp.where(owner_gate, next_edge_state, edge_state)
                 sampled = sample_continuous_edges(
                     jnp.transpose(state_grid, (0, 2, 3, 1)), next_position
@@ -197,7 +191,6 @@ class UpdateModel(nn.Module):
                 )
                 next_edge_values = (
                     next_position,
-                    next_velocity,
                     next_edge_state,
                 )
             else:

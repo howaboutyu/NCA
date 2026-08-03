@@ -1,0 +1,115 @@
+---
+title: "Conditional 3D Conv NCA"
+subtitle: "Implementation notes and validation evidence"
+author: "NCA experiments"
+date: last-modified
+format:
+  html:
+    toc: true
+    toc-location: left
+    theme: cosmo
+    code-fold: true
+execute:
+  echo: false
+---
+
+## Overview
+
+The 3D branch extends the neural cellular automaton from a 2D image lattice to
+a shallow volumetric state. The model still reconstructs an RGBA image from a
+selected spatial face, while the remaining depth provides room for local
+communication and hidden state.
+
+## State layout
+
+The training state uses channel-first layout
+
+$$
+s \in \mathbb{R}^{B \times C \times D \times H \times W}.
+$$
+
+- channels `0:3`: RGB;
+- channel `3`: alpha/liveness;
+- channels `4:C`: hidden state;
+- the supervised image is `clip(s[:, :4, z=render_index], 0, 1)`.
+
+The main 64×64 configuration uses `D=8`, `C=32`, `render_index=4`, and a
+128-channel hidden update layer. The target is a 2D RGBA Pokémon image.
+
+## Learned Conv3D update
+
+`UpdateModel3D` applies a learned zero-padded `3×3×3` Conv3D perception layer,
+then pointwise `1×1×1` update layers. The zero-initialized final layer starts
+as an identity automaton. Each cell receives a stochastic update mask, and
+alpha-neighbourhood masking removes cells that are no longer connected to the
+living structure.
+
+The update rule is:
+
+$$
+s_{t+1} = s_t + m_t \odot \Delta_\theta(P_{3D}(s_t)).
+$$
+
+## Conditional identity path
+
+The same model can condition local updates on a Pokémon ID. A learned ID
+embedding is broadcast over the volume and concatenated to the Conv3D features
+before the pointwise update layers. Pool citizens retain their identity while
+being ranked, damaged, shuffled, and written back.
+
+The branch also contains optional fixed curl/divergence features over three
+hidden channels. These are additional perception inputs; they do not replace
+the learned Conv3D communication path.
+
+## Training objective
+
+The reconstruction loss can weight foreground pixels more heavily than the
+transparent background:
+
+$$
+L_{fg} = \frac{\operatorname{mean}(w \odot (\hat y-y)^2)}
+              {\operatorname{mean}(w)},
+\qquad
+w = 1 + (\lambda_{fg}-1)y_\alpha.
+$$
+
+An optional off-target alive-volume penalty is implemented, but the main
+`exp_3d_nca16_face0_dodrio_64` configuration currently sets
+`alive_volume_penalty: 0.0`; it is therefore disabled in that run.
+
+## Validation and rendering
+
+Validation produces three complementary views:
+
+1. the selected reconstructed face;
+2. numbered depth slices;
+3. an RGB voxel preview using only cells above the configured alpha threshold.
+
+The voxel renderer runs as a single background process so expensive Matplotlib
+rendering does not block training. The voxel view is qualitative evidence and
+should be interpreted separately from the selected-face reconstruction loss.
+
+## Example from the latest completed validation
+
+The following examples are from step 59,500 of the 64×64 run. The selected
+face is recognizable, while the depth and voxel views still show lattice noise;
+this is an open optimization target rather than evidence of a clean 3D volume.
+
+### Selected face
+
+![Selected reconstructed face](gifs/3d_conv/59500_selected_face.gif)
+
+### Depth slices
+
+![Depth-slice evolution](gifs/3d_conv/59500_z_slices.gif)
+
+### RGB voxel preview
+
+![RGB voxel evolution](gifs/3d_conv/59500_rgb_voxels.gif)
+
+## Reproducibility
+
+The implementation lives in `nca/nca3d.py` and
+`scripts/train_3d_nca.py`. Focused regression coverage is in
+`tests/test_nca3d.py`. The 3D preview configuration is
+`configs/exp_3d_nca16_face0_dodrio_64.yaml`.

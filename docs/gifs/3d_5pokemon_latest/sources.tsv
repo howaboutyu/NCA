@@ -1,0 +1,6 @@
+pokemon_id	name	step	snapshot	gif
+0	bulbasaur	97500	runs/3d_5pokemon_seed_id_once_32ch_rgba_mse/validation/97500_rgb_voxel_sources.npz	docs/gifs/3d_5pokemon_latest/pokemon_00_bulbasaur_latest.gif
+1	charmander	98000	runs/3d_5pokemon_seed_id_once_32ch_rgba_mse/validation/98000_rgb_voxel_sources.npz	docs/gifs/3d_5pokemon_latest/pokemon_01_charmander_latest.gif
+2	squirtle	96000	runs/3d_5pokemon_seed_id_once_32ch_rgba_mse/validation/96000_rgb_voxel_sources.npz	docs/gifs/3d_5pokemon_latest/pokemon_02_squirtle_latest.gif
+3	pikachu	96500	runs/3d_5pokemon_seed_id_once_32ch_rgba_mse/validation/96500_rgb_voxel_sources.npz	docs/gifs/3d_5pokemon_latest/pokemon_03_pikachu_latest.gif
+4	eevee	97000	runs/3d_5pokemon_seed_id_once_32ch_rgba_mse/validation/97000_rgb_voxel_sources.npz	docs/gifs/3d_5pokemon_latest/pokemon_04_eevee_latest.gif

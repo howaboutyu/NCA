@@ -1,0 +1,70 @@
+# Warm-start the regeneration model with direct-(dx,dy) moving synapses.
+dimensions: [64, 64]
+model_output_len: 64
+perception_method: learned
+nonlocal_connections: true
+nonlocal_mode: moving_edges
+edge_count: 2
+edge_state_dim: 8
+edge_step_size: 0.03
+edge_state_step_size: 0.05
+edge_message_scale: 0.15
+edge_visualization_stride: 8
+state_clip: 16.0
+pokemon_embedding_dim: 32
+pokemon_targets:
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/bulbasaur.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/charmander.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/squirtle.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/pikachu.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/eevee.png"
+seed_pattern: pokeball
+seed_size: 11
+seed_density: 0.0
+seed_noise_density: 0.25
+seed_random_seed: 0
+stochastic_update_prob: 0.5
+batch_size: 4
+pool_size: 1000
+total_training_steps: 120000
+num_nca_steps: 64
+total_eval_steps: 360
+learning_rate: 0.00005
+
+n_damage: 2
+train_cutout_strategies:
+  - "left_side"
+  - "random_side"
+  - "circle"
+  - "ellipse"
+  - "square"
+train_cutout_square_height_factor_range: [0.12, 0.60]
+train_cutout_square_width_factor_range: [0.12, 0.60]
+train_cutout_left_width_factor_range: [0.15, 0.75]
+train_cutout_noise_probability: 1.0
+train_cutout_noise_scale: [0.05, 0.65]
+
+inference_apply_cutout: true
+inference_cutout_strategies:
+  - "left_side"
+  - "random_side"
+  - "circle"
+  - "ellipse"
+  - "square"
+inference_cutout_square_height_factor_range: [0.12, 0.60]
+inference_cutout_square_width_factor_range: [0.12, 0.60]
+inference_cutout_left_width_factor_range: [0.15, 0.75]
+inference_cutout_noise_probability: 1.0
+inference_cutout_noise_scale: [0.05, 0.65]
+inference_cutout_start_step: 60
+inference_cutout_interval_steps: 90
+
+target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/dodrio.png"
+weights_dir: "/mnt/ssd1/data/git/NCA/runs/conditional_pokemon_strong_cutout_resume/checkpoints/checkpoint_129001"
+checkpoint_dir: "/mnt/ssd1/data/git/NCA/runs/conditional_pokemon_direct_synapse/checkpoints"
+validation_video_dir: "/mnt/ssd1/data/git/NCA/runs/conditional_pokemon_direct_synapse/validation_videos"
+log_dir: "/mnt/ssd1/data/git/NCA/runs/conditional_pokemon_direct_synapse/logs"
+evaluation_video_file: "/mnt/ssd1/data/git/NCA/runs/conditional_pokemon_direct_synapse/evaluation.mp4"
+checkpoint_every: 500
+eval_every: 500
+log_every: 500

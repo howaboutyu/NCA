@@ -175,6 +175,22 @@ class NCADataGenerator:
         return NHWC_to_NCHW(img)
 
     @staticmethod
+    def random_cutout_left_side(
+        img_nchw: Array,
+        width_factor: float = 0.5,
+        seed: int = 10,
+    ):
+        """Black out a contiguous left strip while keeping full height."""
+        # Keep augmentation in NumPy to avoid GPU/PTX compatibility issues.
+        img = np.asarray(NCHW_to_NHWC(img_nchw)).copy()
+        _ = seed
+        n, h, w, _ = img.shape
+        cutout_w = max(1, int(round(w * np.clip(width_factor, 0.0, 1.0))))
+        # Deterministic: always blacken the leftmost columns.
+        img[:, :, :cutout_w, :] = 0
+        return NHWC_to_NCHW(img)
+
+    @staticmethod
     def random_cutout_circle(img_nchw: Array, seed: int):
         img = np.asarray(NCHW_to_NHWC(img_nchw)).copy()
         n, h, w, _ = img.shape
@@ -185,4 +201,131 @@ class NCADataGenerator:
             radius = rng.uniform(0.05, 0.2)
             mask = ((xx - cx) / radius) ** 2 + ((yy - cy) / radius) ** 2 < 1.0
             img[i][mask] = 0
+        return NHWC_to_NCHW(img)
+
+    @staticmethod
+    def random_cutout(
+        img_nchw: Array,
+        seed: int,
+        strategies: tuple = ("circle",),
+        square_height_factor_range: tuple = (0.05, 0.25),
+        square_width_factor_range: tuple = (0.05, 0.25),
+        left_width_factor_range: tuple = (0.25, 0.5),
+        noise_probability: float = 0.0,
+        noise_scale: tuple = (0.0, 0.2),
+    ):
+        """Apply a random cutout strategy per sample.
+
+        Args:
+            img_nchw: Input tensor in NCHW.
+            seed: RNG seed.
+            strategies: Iterable of strategies from
+                ``{"circle", "ellipse", "square", "left_side", "random_side"}``.
+            square_height_factor_range: (min,max) for square/circle height scaling.
+            square_width_factor_range: (min,max) for square/circle width scaling.
+            left_width_factor_range: (min,max) for the left-side strip width.
+            noise_probability: Probability of adding RGB noise to the killed region.
+                Alpha and hidden state channels always remain zero so damaged cells
+                cannot survive through injected state.
+            noise_scale: Optional ``(min, max)`` range for RGB noise in cutout.
+        """
+        img = np.asarray(NCHW_to_NHWC(img_nchw)).copy()
+        rng = np.random.default_rng(seed)
+        n, h, w, c = img.shape
+        strategies = list(strategies) if strategies else ["circle"]
+
+        def _sample_factor(value_range, lower=0.01, upper=1.0):
+            if isinstance(value_range, (list, tuple)):
+                lo, hi = float(value_range[0]), float(value_range[1])
+                if lo > hi:
+                    lo, hi = hi, lo
+                value = rng.uniform(lo, hi)
+            else:
+                value = float(value_range)
+            return float(np.clip(value, lower, upper))
+
+        def _fill_region(region):
+            fill = np.zeros(region.shape, dtype=img.dtype)
+            if noise_probability > 0.0 and rng.random() < noise_probability:
+                if isinstance(noise_scale, (list, tuple)):
+                    min_scale = np.clip(float(noise_scale[0]), 0.0, 1.0)
+                    max_scale = np.clip(float(noise_scale[1]), 0.0, 1.0)
+                    if min_scale > max_scale:
+                        min_scale, max_scale = max_scale, min_scale
+                    scale = rng.uniform(min_scale, max_scale)
+                else:
+                    scale = np.clip(float(noise_scale), 0.0, 1.0)
+                visible_channels = min(3, region.shape[-1])
+                fill[..., :visible_channels] = (
+                    rng.random(region[..., :visible_channels].shape) * scale
+                )
+            return fill
+
+        for i in range(n):
+            strategy = rng.choice(strategies)
+            if strategy in {"square", "rect", "rectangle"}:
+                hh = int(_sample_factor(square_height_factor_range) * h)
+                ww = int(_sample_factor(square_width_factor_range) * w)
+                hh = max(1, min(h, hh))
+                ww = max(1, min(w, ww))
+                y = rng.integers(0, max(1, h - hh + 1))
+                x = rng.integers(0, max(1, w - ww + 1))
+                img[i, y : y + hh, x : x + ww, :] = _fill_region(
+                    img[i, y : y + hh, x : x + ww, :]
+                )
+            elif strategy in {
+                "left",
+                "left_side",
+                "left-strip",
+                "left_strip",
+                "random_side",
+                "side",
+            }:
+                side = (
+                    str(rng.choice(("left", "right", "top", "bottom")))
+                    if strategy in {"random_side", "side"}
+                    else "left"
+                )
+                factor = _sample_factor(left_width_factor_range)
+                if side in {"left", "right"}:
+                    extent = max(1, int(round(w * factor)))
+                    region = (
+                        img[i, :, :extent, :]
+                        if side == "left"
+                        else img[i, :, w - extent :, :]
+                    )
+                else:
+                    extent = max(1, int(round(h * factor)))
+                    region = (
+                        img[i, :extent, :, :]
+                        if side == "top"
+                        else img[i, h - extent :, :, :]
+                    )
+                region[...] = _fill_region(region)
+            else:  # circle/ellipse fallback
+                yy, xx = np.mgrid[0:h, 0:w]
+                radius_y = max(
+                    1.0,
+                    0.5 * h * _sample_factor(square_height_factor_range, 0.02, 1.0),
+                )
+                radius_x = max(
+                    1.0,
+                    0.5 * w * _sample_factor(square_width_factor_range, 0.02, 1.0),
+                )
+                if strategy not in {"ellipse", "oval"}:
+                    radius_x = radius_y = min(radius_x, radius_y)
+                # Keep the center inside the canvas while allowing the cutout
+                # to clip an edge; this produces partial and central injuries.
+                cx = rng.uniform(0.0, max(1.0, w - 1.0))
+                cy = rng.uniform(0.0, max(1.0, h - 1.0))
+                angle = rng.uniform(0.0, np.pi) if strategy in {"ellipse", "oval"} else 0.0
+                cos_a, sin_a = np.cos(angle), np.sin(angle)
+                dx, dy = xx - cx, yy - cy
+                rotated_x = cos_a * dx + sin_a * dy
+                rotated_y = -sin_a * dx + cos_a * dy
+                mask = (rotated_x / radius_x) ** 2 + (
+                    rotated_y / radius_y
+                ) ** 2 < 1.0
+                img[i][mask] = _fill_region(img[i][mask])
+
         return NHWC_to_NCHW(img)

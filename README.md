@@ -12,13 +12,19 @@
 
 ---
 
-<p align="center"> A Jax implementation of Neural Cellular Automata 
-    <br> 
-    <img src="./docs/gifs/output_half.gif" alt="NCA">
-    <img src="./docs/gifs/pokemon_64ch_64x64_nosyn.gif" alt="64-channel 64x64 Pokémon reconstruction without synapses">
-
+<p align="center">
+  A JAX implementation of Neural Cellular Automata
+  <br><br>
+  <img src="./docs/gifs/output_half.gif" width="320" alt="Neural Cellular Automata growth">
 </p>
 
+<h3 align="center">Conditional 3D NCA showcase</h3>
+
+<p align="center">
+  <img src="./docs/gifs/3d_5pokemon_latest/conditional_pokemon_showcase_latest.gif" width="720" alt="Conditional 3D NCA rollouts for Charmander, Squirtle, Pikachu, and Eevee">
+  <br>
+  <em>Latest available per-Pokémon 3D NCA rollouts, synchronized by rollout time: Charmander, Squirtle, Pikachu, and Eevee.</em>
+</p>
 
 ## 📝 Table of Contents
 
@@ -118,6 +124,14 @@ python main.py --config_path=configs/growing_nca.yaml --mode=evaluate --output_v
 ```
 
 Please ensure that you update the `weights_dir` field in the configuration file with the accurate path to the downloaded checkpoint. Additionally, specify the `output_video_path` to determine the location where the NCA propagation will be saved in video format.
+
+If the model is trained with conditional Pokémon targets, run all identities in one command with cutout simulation:
+
+```bash
+python main.py --config_path=path/to/config.yaml --mode=evaluate_all_pokemon --output_dir=./runs/inference_all_pokemon
+```
+
+This command writes one `pokemon_<id>_<name>_cutout.mp4` file per configured Pokémon target under the given output directory (defaulting to your chosen `./runs/...` path). These videos are runtime outputs and are intentionally excluded from git tracking.
 
 ### 🔖 Checkpoints  <a name="checkpoints"></a>
 

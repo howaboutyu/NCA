@@ -1,0 +1,70 @@
+# Retraining from the previous conditional learned checkpoint with randomized cutout
+# strategies (circle/square/left-side), randomized sizes, and optional noisy fill.
+dimensions: [64, 64]
+model_output_len: 64
+perception_method: learned
+nonlocal_connections: false
+nonlocal_mode: global
+edge_count: 0
+edge_state_dim: 16
+edge_momentum: 0.9
+edge_step_size: 0.05
+edge_state_step_size: 0.05
+edge_message_scale: 0.25
+edge_visualization_stride: 8
+state_clip: 16.0
+pokemon_embedding_dim: 32
+pokemon_targets:
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/bulbasaur.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/charmander.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/squirtle.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/pikachu.png"
+  - "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/eevee.png"
+seed_pattern: pokeball
+seed_size: 11
+seed_density: 0.0
+seed_noise_density: 0.25
+seed_random_seed: 0
+stochastic_update_prob: 0.5
+batch_size: 8
+pool_size: 1000
+total_training_steps: 120000
+num_nca_steps: 64
+total_eval_steps: 300
+learning_rate: 0.0001
+n_damage: 1
+target_filename: "/mnt/ssd1/data/git/NCA/data/pokemon_emoji/emojis/dodrio.png"
+
+# Randomized cutout augmentation used for damaged training states.
+train_cutout_strategies:
+  - "circle"
+  - "square"
+  - "left_side"
+train_cutout_square_height_factor_range: [0.08, 0.28]
+train_cutout_square_width_factor_range: [0.08, 0.28]
+train_cutout_left_width_factor_range: [0.2, 0.7]
+train_cutout_noise_probability: 0.45
+train_cutout_noise_scale: [0.0, 0.45]
+
+# Inference should follow the same randomized perturbation style.
+inference_apply_cutout: true
+inference_cutout_strategies:
+  - "circle"
+  - "square"
+  - "left_side"
+inference_cutout_height_factor: 0.2
+inference_cutout_width_factor: 0.5
+inference_cutout_square_height_factor_range: [0.08, 0.28]
+inference_cutout_square_width_factor_range: [0.08, 0.28]
+inference_cutout_left_width_factor_range: [0.2, 0.7]
+inference_cutout_noise_probability: 0.45
+inference_cutout_noise_scale: [0.0, 0.45]
+
+weights_dir: "/mnt/ssd1/data/git/NCA-expa-worktree/runs/conditional_pokemon_learned_64ch_64x64_nosyn_fresh/checkpoints"
+checkpoint_dir: "/mnt/ssd1/data/git/NCA/runs/conditional_pokemon_learned_64ch_64x64_random_cutout/checkpoints"
+validation_video_dir: "/mnt/ssd1/data/git/NCA/runs/conditional_pokemon_learned_64ch_64x64_random_cutout/validation_videos"
+log_dir: "/mnt/ssd1/data/git/NCA/runs/conditional_pokemon_learned_64ch_64x64_random_cutout/logs"
+evaluation_video_file: "/mnt/ssd1/data/git/NCA/runs/conditional_pokemon_learned_64ch_64x64_random_cutout/evaluation.mp4"
+checkpoint_every: 500
+eval_every: 500
+log_every: 500
