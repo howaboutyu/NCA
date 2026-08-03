@@ -30,34 +30,11 @@
 
 <h3 align="center">Inference gallery (conditional Pokémon)</h3>
 
-<div align="center">
-<table>
-  <tr>
-    <td align="center">
-      <img src="./docs/gifs/inference_all_pokemon/pokemon_00_bulbasaur_cutout.gif" width="300" alt="Bulbasaur inference"><br/>
-      Bulbasaur
-    </td>
-    <td align="center">
-      <img src="./docs/gifs/inference_all_pokemon/pokemon_01_charmander_cutout.gif" width="300" alt="Charmander inference"><br/>
-      Charmander
-    </td>
-    <td align="center">
-      <img src="./docs/gifs/inference_all_pokemon/pokemon_02_squirtle_cutout.gif" width="300" alt="Squirtle inference"><br/>
-      Squirtle
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="./docs/gifs/inference_all_pokemon/pokemon_03_pikachu_cutout.gif" width="300" alt="Pikachu inference"><br/>
-      Pikachu
-    </td>
-    <td align="center">
-      <img src="./docs/gifs/inference_all_pokemon/pokemon_04_eevee_cutout.gif" width="300" alt="Eevee inference"><br/>
-      Eevee
-    </td>
-  </tr>
-</table>
-</div>
+<p align="center">
+  <img src="./docs/gifs/3d_5pokemon_latest/conditional_pokemon_showcase_latest.gif" width="720" alt="Conditional 3D NCA rollouts for Charmander, Squirtle, Pikachu, and Eevee">
+  <br>
+  <em>Latest available per-Pokémon 3D NCA rollouts, synchronized by rollout time: Charmander, Squirtle, Pikachu, and Eevee.</em>
+</p>
 
 ## 📝 Table of Contents
 
